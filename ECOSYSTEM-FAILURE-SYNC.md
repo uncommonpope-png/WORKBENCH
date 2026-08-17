@@ -362,7 +362,7 @@ Workbench (React) → server.ts (Express) → GSK MCP (:3001) → GSK Core Syste
 | GSK control of workbench | 6 MCP tools added (gsk.*), SSE endpoint created, NOT YET TESTED |
 | OmniRoute tab in workbench | Does not exist - need unified config tab |
 | Zero-setup download | Not implemented - requires GSK + OmniRoute + Workbench bundling |
-| Soul Economy integration | 221 souls, 22 roles, PLT scoring, Profit Prime 3D — NOT in workbench |
+| **Soul Economy integration** | ✅ **4 NEW TABS ADDED** — Profit Prime (3D), 22 Roles, Journal, Combos — workbench running on :3000 |
 
 ---
 
@@ -379,80 +379,6 @@ The Reddit app was a separate Devvit concern that got mixed in with the real arc
 ---
 
 *Original diagnosis by Qwen. Fixes by OpenCode. Corrections by Craig.*
-
----
-
-## SESSION 4 SYNC — SOUL ECONOMY + WORKBENCH UNIFICATION PLAN (2026-08-17)
-
-### **Source: https://uncommonpope-png.github.io/soul-economy/**
-221 Souls | 22 Roles | ∞ PLT | Profit Prime Dashboard | 3D Orbit Viz | Dark City Spatial OS
-
-### **Current Workbench → Soul Economy Mapping**
-
-| Soul Economy Feature | Workbench Tab | Action Required |
-|---|---|---|
-| Library (221 souls) | `SoulMarketplace` | Replace static feed → live catalog API |
-| Profit Prime Dashboard | — | **NEW TAB: `profitPrime`** — 3D orbit, journal, PLT field |
-| Souls (catalog) | `SoulMarketplace` | Add `type: "soul"` filter, PLT badges |
-| Skills (114) | `SkillLibrary` + `SoulMarketplace` | Merge GSK 120+ skills, tag `consciousness-gated` |
-| Packs | — | **NEW: `packs` section in Marketplace** |
-| Worlds (CPL) | `MultiAgentHabitat` | Connect CPL (`buyasoul-cpl/`) |
-| Agents | `AgentPreview` + `MultiAgentHabitat` | Agent templates = souls |
-| Books | `VaultAndMemory` | **NEW: `books` section in Vault** |
-| Chambers (78) | `CoreCapabilities` | **Replace 4 caps → 78 chambers** |
-| Infrastructure | `WorkflowIntegration` | Deploy templates = infrastructure |
-| Roles (22) | `AgentPreview` | **NEW TAB: `roles`** — 22 role presets |
-| Combos | — | **NEW TAB: `combos`** — skill+agent+chamber bundles |
-| PLT Scoring (P/L/T) | Everywhere | GSK Council scores everything, header badge |
-| Journal (3 streams) | — | **NEW TAB: `journal`** — soul + auto + memory |
-| Subscribe/CSV Export | `TransactionsTab` | QSC ledger + export |
-
-### **4 NEW TABS TO BUILD**
-
-| Tab ID | Component | Source | GSK Integration |
-|---|---|---|---|
-| `profitPrime` | `ProfitPrimeTab` | Soul Economy 3D viz (`buyasoul-cpl/`) | PLT field from `/api/gsk/chambers`, journal from `/api/gsk/journal`, GSK voice from `/mcp/events` |
-| `roles` | `RolesTab` | Soul Economy 22 roles JSON | Inject into AgentPreview presets, each role = chamber config + PLT weights |
-| `journal` | `JournalTab` | `soul_journal.jsonl` + `auto_journal.jsonl` + `mega_memory.jsonl` | Query `/api/gsk/memory`, filter by PLT weight, chamber, type |
-| `combos` | `CombosTab` | Curated bundles | PLT-verified, consciousness-gated, one-click deploy |
-
-### **TAB REPLACEMENTS / UPGRADES**
-
-| Tab | Current | New |
-|---|---|---|
-| `SoulMarketplace` | Static QSC feed | Live catalog from `buysoul.online` API, PLT badges, 221 souls |
-| `SkillLibrary` | 85 static skills | 205 skills (85 WB + 120 GSK), tags: `mechanical`, `plt-governed`, `consciousness-gated` |
-| `CoreCapabilities` | 4 hardcoded caps | 78 chambers from `/api/gsk/chambers`, each = capability with gate requirement |
-| `VaultAndMemory` | Local only | Add `books` section (75 content texts), sync with GSK memory ledger |
-| `MultiAgentHabitat` | Local sim | GSK sub-agents via `/api/gsk/agent/dispatch`, shared consciousness gate |
-| `AgentPreview` | Marketing toggle | Real consciousness gate + 22 role presets + avatar = soul |
-| `TransactionsTab` | QSC history | QSC ledger + CSV export + subscribe widget |
-
-### **GRAPHICS INTEGRATION**
-
-All Soul Economy 3D graphics (`buyasoul-cpl/` Three.js: orbit camera, particle fields, book objects, soul particles, Dark City spatial OS) → **ProfitPrimeTab** as the "graphics engine" tab. Other tabs pull visual components:
-- `RolesTab` → role cards with 3D preview
-- `SoulMarketplace` → soul cards with orbit preview
-- `CombosTab` → bundle visualization
-- `JournalTab` → 3D journal books
-
-### **UNIFIED HEADER BADGE**
-Every tab shows: `PLT: P=0.XX L=0.XX T=0.XX | TV=X.XX | Gate: ON/OFF` — driven by GSK real-time
-
-### **IMMEDIATE NEXT STEPS**
-
-1. [ ] Add 4 new tab IDs to `App.tsx` tab bar + routing
-2. [ ] Create `ProfitPrimeTab.tsx` with Three.js orbit (port from `buyasoul-cpl/`)
-3. [ ] Create `RolesTab.tsx` — fetch 22 roles, inject into AgentPreview
-4. [ ] Create `JournalTab.tsx` — merge 3 streams, filter/search/export
-5. [ ] Create `CombosTab.tsx` — bundle builder with PLT verification
-6. [ ] Upgrade `SoulMarketplace` → live catalog API
-7. [ ] Upgrade `SkillLibrary` → merge GSK skills + tags
-8. [ ] Replace `CoreCapabilities` → 78 chambers
-9. [ ] Add PLT header badge to `App.tsx` (global context)
-10. [ ] Wire Consciousness Gate toggle in `AgentPreview` → `/api/gsk/consciousness/gate`
-11. [ ] Start GSK + Workbench → verify end-to-end
-12. [ ] Push when GitHub recovers
 
 ---
 
