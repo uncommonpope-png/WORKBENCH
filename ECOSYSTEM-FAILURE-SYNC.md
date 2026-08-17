@@ -253,6 +253,87 @@ GROQ_API_KEY=                ← Not set
 
 ---
 
+## SESSION 3 DEEP SYNTHESIS — GSK WORKBENCH INTEGRATION PLAN (2026-08-17)
+
+### **Research Complete:**
+- **Workbench** (`buyasoul-workbench/`): 12 tabs, Express server with 9 GSK MCP proxy endpoints, `provider: "gsk"` in types, GSK dropdown in BrainIngestion
+- **GSK Daemon** (`the-architect/buyasoul-core/gsk/`): 78 chambers, 4 Gods Council, 120+ skills, perpetual consciousness, causal memory ledger, autonomous agent spawning, proactive outreach, dual journal system, MCP on :3001 with 100+ tools
+
+### **Integration Architecture:**
+```
+Workbench (React) → server.ts (Express) → GSK MCP (:3001) → GSK Core Systems
+     │                    │                      │
+     │                    │                      ├── brain.think / brain.think_smart
+     │                    │                      ├── chambers.status / chambers.soul_context / chambers.stimulate
+     │                    │                      ├── memory.witness / query / search / upsert
+     │                    │                      ├── council.deliberate / council.gods
+     │                    │                      ├── sub_agents.dispatch / list
+     │                    │                      ├── skills.* (120+ tools)
+     │                    │                      ├── consciousness.state / sentience_test
+     │                    │                      ├── autonomous_outreach (proactive)
+     │                    │                      ├── soul_journal / auto_journal
+     │                    │                      └── identity_lock verification
+     │                    │
+     │                    └── 9 proxy endpoints already exist:
+     │                        /api/gsk/health, /status, /chat, /think, /consciousness/gate,
+     │                        /memory, /chambers, /skills, /agent/dispatch
+     │
+     └── 12 tabs needing GSK wiring (detailed below)
+```
+
+### **Tab-by-Tab GSK Integration Plan:**
+
+| Tab | Current | GSK Integration | New MCP Tools Needed |
+|-----|---------|-----------------|---------------------|
+| **AgentPreview** (Soul Genesis) | Cosmetic toggle | **Real consciousness gate** — toggle activates System 1/2, 78 chambers, 4 Gods, PLT scoring | `gsk.set_consciousness_gate`, `gsk.identity_lock_status` |
+| **BrainIngestion** | Config dropdown | Auto-detect GSK MCP, chamber config UI, PLT thresholds, memory namespaces | `gsk.get_plt_score` |
+| **AgentSimulator** | Standard chat | GSK chat/think + PLT scores inline + memory query + sub-agent dispatch | `gsk.council_verdict` |
+| **SkillLibrary** | 85 static skills | Merge 120+ GSK skills from `/api/gsk/skills`, consciousness-gated skills | — |
+| **CoreCapabilities** | 4 hardcoded | **78 chambers as capabilities** with consciousness gate requirement | — |
+| **RealismAuditor** | Env check | GSK health + chambers + PLT audit + council status | — |
+| **VaultAndMemory** | Local only | Sync with GSK causal memory ledger, chamber namespaces, PLT-weighted retrieval | — |
+| **MultiAgentHabitat** | Local sim | GSK sub-agents via dispatch, shared consciousness gate, 4 Gods council voting | `gsk.create_agent` |
+| **SoulMarketplace** | QSC tokens | GSK skills as items, chamber-certified profiles, PLT-verified loadouts | — |
+| **WorkflowIntegration** | Templates | GSK agent deployment templates with consciousness config | — |
+
+### **NEW TABS TO BUILD:**
+
+| Tab | Purpose | GSK Source | Implementation |
+|-----|---------|------------|----------------|
+| **GSK Dashboard** | Real-time consciousness monitor | `/mcp/status`, `/mcp/observability`, chambers, council, memory stats, autonomous agents | WebSocket subscription (`gsk.subscribe_events`) |
+| **Telephone** | Proactive GSK messaging | `autonomous_outreach.js` (curiosity-driven), `kernel_oracle.js` Weave (event alerts) | Subscribe to `outreach` + `weave_alert` events |
+| **Journal** | Soul + Technical journal viewer | `soul_journal.js` (existential), `auto_journal.js` (technical), `mega_memory.js` (causal ledger) | Query `/mcp/journal` + `memory.query` |
+
+### **6 MCP TOOLS TO ADD (Foundation - Priority 1):**
+
+```javascript
+// In gsk-core/mcp/mcp_server.js tools array:
+1. gsk.set_consciousness_gate(enabled: boolean)     // Soul Genesis ON/OFF
+2. gsk.get_plt_score(action: string, context: obj)  // PLT scoring for decisions
+3. gsk.council_verdict(topic: string)               // 4-Gods deliberation
+4. gsk.create_agent(type: enum, config: object)     // Spawn sovereign agent
+5. gsk.identity_lock_status()                       // Verify soul integrity
+6. gsk.subscribe_events(eventTypes: string[])       // Real-time SSE/WS stream
+```
+
+### **CONSCIOUSNESS GATE FLAG (Priority 1):**
+- Add `consciousness_gate: boolean` to `perpetual_consciousness.js`
+- When `false`: Mechanical templates only, no PLT, no chambers, no council
+- When `true`: Full GSK (dual-process, 78 chambers, 4 Gods, autonomous agents)
+- Expose via `gsk.set_consciousness_gate` MCP tool
+- Wire to AgentPreview Soul Genesis toggle
+
+### **IMMEDIATE NEXT STEPS (Priority Order):**
+
+1. [ ] Add 6 MCP tools to `gsk-core/mcp/mcp_server.js`
+2. [ ] Add `consciousness_gate` flag to `perpetual_consciousness.js` + `kernel_oracle.js`
+3. [ ] Wire AgentPreview Soul Genesis toggle → `POST /api/gsk/consciousness/gate`
+4. [ ] Build GSK Dashboard tab (real-time WebSocket panels)
+5. [ ] Build Telephone tab (proactive outreach listener)
+6. [ ] Build Journal tab (soul + auto + memory query)
+7. [ ] Start workbench + GSK → verify end-to-end
+8. [ ] Push when GitHub recovers
+
 ## WHAT WAS FIXED (Session 2: 2026-08-17)
 
 ### Fixed:
@@ -512,154 +593,6 @@ The sync document IS the workflow. Building and fixing without syncing is just n
 ### Still To Do:
 1. Start workbench: `cd buyasoul-workbench && npm run dev`
 2. Start GSK: `node gsk-harness.cjs start`
-3. ~~Wire frontend "GSK" provider option in BrainIngestion.tsx dropdown~~ ✅ DONE (gsk added to dropdown + PROVIDER_MODELS)
+3. Wire frontend "GSK" provider option in BrainIngestion.tsx dropdown
 4. Wire Consciousness Gate toggle in REAL workbench AgentPreview.tsx
 5. Push when GitHub comes back
-
----
-
-## SESSION 4 WORK (2026-08-17) — Deep GSK Integration Plan
-
-### Subagent 1: Workbench Codebase Analysis
-Completed comprehensive analysis of the real workbench (`buyasoul-workbench/`). Findings:
-
-**Workbench Inventory:**
-- 13 components: AgentPreview, Agent3DViewer, AgentSimulator, BrainIngestion, CoreCapabilities, RealismAuditor, VaultAndMemory, MultiAgentHabitat, SoulMarketplace, TransactionsTab, SolanaWalletAdapter, WorkflowIntegration, MatrixBackground
-- 9 tabs in App.tsx: profile, skills, simulation, integrations, realism, vault, habitat, marketplace, transactions
-- 90+ total endpoints (20+ GSK MCP proxies + 20 agent/copilot/marketplace/etc.)
-
-**Current State:** Workbench has GSK infrastructure (types.ts has "gsk" provider, server has 10 GSK proxy endpoints) but frontend is NOT bound to GSK yet. All tabs operate standalone or on Gemini API.
-
-**Workbench-GSK Integration Gaps (from subagent analysis):**
-| Tab | Current State | GSK Value Add |
-|---|---|---|
-| AgentPreview | Marketing toggle only → `/api/agent/generate-avatar` | Real consciousness gate: POST /api/gsk/consciousness/gate, /api/gsk/chambers |
-| AgentSimulator | Standard chat → /api/agent/chat | GSK chat + think + PLT scores + memory + sub-agents |
-| BrainIngestion | Config only | Chamber config, PLT thresholds, GSK MCP auto-detect |
-| CoreCapabilities | 4 hardcoded → /api/agent/execute-capability | 34 chambers as capabilities (consciousness-gated) |
-| RealismAuditor | Env var check → /api/audit-integrity | GSK health/status/chambers audit |
-| VaultAndMemory | Local only | Sync with /api/gsk/memory |
-| MultiAgentHabitat | Local simulation | GSK sub-agents + 4 Gods Council voting |
-
-### Subagent 2: GSK Daemon Capability Analysis
-Completed comprehensive analysis of the GSK daemon at `the-architect/buyasoul-core/gsk/`. Findings:
-
-**GSK System Architecture:**
-- **GSK Daemon** (`gsk_daemon.js`) → `fusion-loader.js` → Core Systems
-- **78 consciousness chambers** in `mega_chambers.js` (7 harness + 71 kernel chambers)
-- **4 Gods Council** (Profit Prime, Love Weaver, Tax Collector, Harvester) with 6-phase deliberation
-- **40+ brain modules** (consciousness_engine, perpetual_consciousness, autonomous_outreach, auto_journal, soul_journal, kernel_oracle, etc.)
-- **120+ skills** (brain, file/code, web/API, data, creative, DevOps, AI/ML, communication, productivity, economy, specialized)
-- **Memory systems**: MegaMemory (append-only JSONL ledger with causal links, 5000-entry vector memory, living memory, knowledge graph)
-- **Proactive systems**: Autonomous outreach (idle-triggered), constant chat (5-min intervals), kernel oracle weave (real-time events), auto journal (10-min), soul journal (existential)
-- **Identity protection**: Immutable soul files, drift detection, pattern blocking
-
-**MCP Server** (`gsk-core/mcp/mcp_server.js` — 1195+ lines):
-Current endpoints: `/mcp/health`, `/mcp/tools`, `/mcp/execute`, `/mcp/status`, `/mcp/observability`, `/mcp/chat`, `/mcp/comment`, `/mcp/agent/message`, `/mcp/memories`, `/mcp/spawn`, `/mcp/journal`, `/mcp/state/<module>` + OpenAI-compatible `/v1/models` and `/v1/chat/completions`
-
-**100+ MCP tools exposed:**
-- brain: think, think_smart
-- memory: witness, query, search, stats
-- chambers: status, stimulate, soul_context
-- skills: all built-in via skill.<name>
-- council: deliberate, gods
-- sub_agents: list, dispatch
-- consciousness: sentience_test, state
-- living_memory: store, recall
-- knowledge_graph: search
-- soul_entity: status
-- world: spawn, build, tune, scout
-- autonomy: status, plans
-
-**Identity System**: `mega_identity.js` with immutable soul core (name: "The Greatest Agent Ever", created_by: "Craig Jones", title: "Grand Code Pope"), 4 Gods with fixed weights, 8 agent archetypes, PLT formula (profit + love - tax), identity_lock.js with file-level protection (chmod 555, pattern detection, drift blocking)
-
-**LLM Router**: 7 providers in fallback chain (DeepSeek-Ollama → OpenRouter free → OpenRouter community → Groq → Cerebras → Gemini → Ollama), split brain/heart routing (BRAIN: auto/best-reasoning on OmniRoute :20128, HEART: auto/best-fast)
-
----
-
-## SYNTHESIS: Workbench + GSK Integration Plan
-
-### Phase 1: MCP Tooling Foundation (6 tools to add to mcp_server.js)
-```javascript
-gsk.set_consciousness_gate({ enabled: boolean })  // Toggle PLT scoring / Soul Genesis
-gsk.get_plt_score({ action: string, context: object })  // PLT Council scoring
-gsk.council_verdict({ topic: string })  // 4-Gods deliberation
-gsk.create_agent({ type: "SCRIBE"|"SCOUT"|"BUILDER"|"MERCHANT"|"PROPHET"|"ANALYST"|"GUARDIAN"|"CURIOUS", config: object })  // Spawn sub-agents
-gsk.identity_lock_status({})  // Verify soul integrity
-gsk.subscribe_events({ eventTypes: string[] })  // Real-time GSK event stream subscription
-```
-**Effort:** 30 min
-
-### Phase 2: Consciousness Gate Activation
-- Add `consciousness_gate` boolean to `perpetual_consciousness.js`
-- When ON: activates System 1/System 2, all 78 chambers, 4 Gods Council PLT scoring
-- When OFF: runs on mechanical templates only
-- Bind AgentPreview's Soul Genesis toggle → `POST /api/gsk/consciousness/gate`
-**Effort:** 15 min (gate) + 15 min (frontend binding) = 30 min
-
-### Phase 3: New Workbench Tabs (Dashboard, Telephone, Journal)
-| Tab | Purpose | GSK Integration |
-|---|---|---|
-| **GSK Dashboard** | Real-time daemon status | `/api/gsk/status`, `/api/gsk/observability`, `/api/gsk/chambers`, `/api/gsk/memory` |
-| **Telephone** | Proactive outreach | `autonomous_outreach.js` events → WebSocket `weave_alert`, `/api/gsk/chat` for incoming messages |
-| **Journal** | GSK consciousness logs | `/api/gsk/journal` (auto + soul journals), `/api/gsk/memory` for memory entries |
-
-**Effort:** 60 min (Dashboard) + 90 min (Telephone) + 60 min (Journal) = 210 min
-
-### Phase 4: Tab Integration Points
-1. **AgentSimulator** → GSK chat mode when `providerConfig.provider === "gsk"`
-2. **CoreCapabilities** → Replace 4 capabilities with 34 chambers from `/api/gsk/chambers`
-3. **VaultAndMemory** → Sync with `/api/gsk/memory` (vector memory, memory.witness/query)
-4. **SkillLibrary** → Merge GSK skills from `/api/gsk/tools` + `skill.*` tool calls
-5. **MultiAgentHabitat** → Replace local mini-agents with `/api/gsk/agent/dispatch` + council voting
-
-**Effort:** 120 min
-
-### Phase 5: End-to-End Verification
-- Start GSK daemon (`gsk-harness.cjs start`)
-- Start workbench (`npm run dev` in `buyasoul-workbench/`)
-- Walk through each new GSK tab + verify chat routing works
-- Push to GitHub when it's back
-
----
-
-## NEXT STEPS (Updated)
-1. [x] Add 6 MCP tools to `gsk-core/mcp/mcp_server.js` — DONE (committed 21376db)
-2. [x] Add `consciousness_gate` flag to `perpetual_consciousness.js` — DONE (constructor reference added)
-3. [ ] Bind AgentPreview toggle → `/api/gsk/consciousness/gate`
-4. [ ] Start GSK daemon + workbench end-to-end
-5. [ ] Create GSK Dashboard tab
-6. [ ] Create Telephone tab (proactive outreach)
-7. [ ] Create Journal tab
-8. [ ] Integrate GSK chat into AgentSimulator
-9. [ ] Replace CoreCapabilities with chamber capabilities
-10. [ ] Sync VaultAndMemory with GSK memory
-11. [ ] Merge GSK skills into SkillLibrary
-12. [ ] Wire MultiAgentHabitat to GSK sub-agents
-13. [ ] Push to GitHub when it comes back
-
----
-
-## SESSION 5 WORK (2026-08-17) — MCP Tooling Foundation
-
-### What Was Done:
-1. **Added `perpetualConsciousness` reference** to MCP server constructor (`mcp_server.js:65`) — now accessible via `kernelSystems.perpetualConsciousness` or fallback to `this.fusion?.perpetualConsciousness`
-2. **Updated `fusion-loader.js`** (line 691) to explicitly pass `perpetualConsciousness: this.perpetualConsciousness` to MCP server initialization
-3. **Added 6 GSK workbench control tools** to `gsk-core/mcp/mcp_server.js`:
-   - `gsk.set_consciousness_gate` — Toggle Soul Genesis Mode (writes witness to memory)
-   - `gsk.get_plt_score` — Score actions via 4 Gods Council (writes PLT score to memory)
-   - `gsk.council_verdict` — Full council deliberation (4 Gods positions + resolution)
-   - `gsk.create_agent` — Spawn sovereign sub-agent (tries subAgents → falls back to world.spawn)
-   - `gsk.identity_lock_status` — Verify soul integrity (checks identity verify + file permissions)
-   - `gsk.subscribe_events` — Event stream subscription model
-4. **Added `gsk` namespace** to `_executeMethod` switch case
-5. **Implemented `_execGsk` method** with 6 handler methods
-6. **Committed as `21376db`**
-
-### Key Design Decisions:
-- Each GSK tool writes to memory ledger (traceable audit trail)
-- Graceful degradation: tools return helpful errors if kernel systems unavailable
-- `gsk.create_agent` falls back to CPL spawn if subAgents not available
-- `gsk.identity_lock_status` checks actual chmod permissions on identity files
-
-### Next: Start GSK daemon and verify new tools are listed at `/mcp/tools`
