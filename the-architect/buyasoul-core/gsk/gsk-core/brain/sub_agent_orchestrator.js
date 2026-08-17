@@ -23,6 +23,21 @@ class WorkerAgent {
     }
 
     async _runTask(task) {
+        // Bridge to ToolCatalog
+        const catalog = this.orchestrator.kernel?.systems?.toolCatalog || this.orchestrator.brain?.toolCatalog;
+        if (catalog) {
+            const matches = catalog.findForTask(task.description);
+            if (matches && matches.length > 0) {
+                const tool = matches[0];
+                if (tool.handler) {
+                    console.log(`[WorkerAgent] ${this.name} using tool: ${tool.name}`);
+                    const result = await tool.handler(task.context || {});
+                    return { agent: this.name, task: task.description, result, toolUsed: tool.name };
+                }
+            }
+        }
+        
+        // Fallback to LLM persona
         const prompts = {
             scribe: `You are Scribe — document and record everything. Task: ${task.description}`,
             scout: `You are Scout — explore and gather information. Task: ${task.description}`,

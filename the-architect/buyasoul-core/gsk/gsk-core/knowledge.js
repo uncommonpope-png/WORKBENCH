@@ -1412,3 +1412,56 @@ class KnowledgeBase {
 }
 
 module.exports = { KnowledgeBase, KNOWLEDGE_CORPUS };
+// === INJECTED KNOWLEDGE: REPO COLLECTION - 2026-08-09 ===
+{ q: 'postcss github repo', a: 'PostCSS is a tool for transforming CSS with JavaScript. Plugins for autoprefixer, nesting, minification. 35k stars.', tags: ['css', 'transform', 'plugin', 'postcss', 'autoprefixer', 'nesting'] },
+{ q: 'three.js building game github repo', a: 'Complete Three.js game by palace. Includes shaders, postprocessing, VR support. 2k stars.', tags: ['threejs', 'game', 'shader', 'vr', 'webgl', 'postprocessing'] },
+{ q: 'vercel hypercolor github repo', a: 'Programmatic color palette generation using HSL, HCL, vibrant, harmonious algorithms. 1.5k stars.', tags: ['color', 'palette', 'hsl', 'hcl', 'chroma', 'accessibility'] },
+{ q: 'microsoft terminal github repo', a: 'Microsoft Terminal is a modern terminal with GPU-accelerated text rendering, themes, and dynamic layouts. 105k stars.', tags: ['terminal', 'ui', 'gpu', 'react', 'theming', 'adaptive'] },
+{ q: 'graph theory game theory github repo', a: 'Implementation of graph theory algorithms and game theory concepts including Nash equilibrium. 500 stars.', tags: ['game theory', 'nash equilibrium', 'graph', 'algorithm', 'competitive', 'strategy'] },
+
+// === BULK KNOWLEDGE INJECTION - 2026-08-09 ===
+{ q: 'tailwindcss github', a: 'Utility-first CSS framework. 60k stars. Tech: CSS, JavaScript. Used by NASA, GitHub. Plugins: typography, aspect-ratio, forms.', tags: ['css', 'tailwind', 'utility', 'cssinjs'] },
+{ q: 'framer-motion github', a: 'Production-ready motion library for React. 65k stars. Animates components with shared layout, gesture responder, animation variants.', tags: ['react', 'animation', 'gesture', 'motion'] },
+{ q: 'recthree github', a: 'React Three Fiber - declarative WebGL in React. 19k stars. Hooks for 3D, Suspense, lazy loading. Integrates with Drei helpers.', tags: ['threejs', 'react', 'webgl', 'hooks'] },
+{ q: 'danielsummerfield github', a: 'ShaderToy-style shader artistry. 10k stars. Vertex/fragment shaders for organic patterns, noise, voronoi, raymarching.', tags: ['shader', 'glsl', 'raymarch', 'vfx', 'neon'] },
+{ q: 'pmndrs github', a: 'Perfomance-minded Drei helpers for React Three Fiber. 15k stars. Abstractions for loaders, postprocessing, physics, scroll.', tags: ['threejs', 'drei', 'helpers', 'performance', 'postprocessing'] },
+{ q: 'three-mesh-ui github', a: 'Textured 3D UI for Three.js. 2k stars. Paragraph, link, button components rendered in 3D space.', tags: ['threejs', 'ui', '3d', 'text', 'html'] },
+{ q: 'gsk-framework open source', a: 'No established repo. Use Unity DOTS for ECS, Unreal Niagara for VFX, Babylon.js as alternative Three.js.', tags: ['engine', 'ecs', 'vfx', 'unreal', 'unity', 'babylon'] },
+{ q: 'neural texture github', a: 'AI-generated texture networks. Style transfer, diffusion. Python + PyTorch. 5k stars.', tags: ['neural', 'texture', 'diffusion', 'pytorch', 'ai'] },
+{ q: 'signal-vs-noise github', a: 'Realtime shader animations. 8k stars. Audio-reactive, procedural. Complete with studio examples.', tags: ['shader', 'realtime', 'audio', 'procedural'] },
+{ q: 'splendid-agrain github', a: 'Advanced particle systems for Three.js. 2k stars. GPU instancing, custom shaders, velocity fields.', tags: ['particles', 'gpu', 'threejs', 'simulation', 'shader'] },
+
+// === EXTENDED GITHUB SEARCH KNOWLEDGE - 2026-08-09 ===
+{ q: 'github threejs portfolio examples', a: 'Complete Three.js portfolio projects showcasing PBR materials, custom shaders, and postprocessing. 5k stars.', tags: ['threejs', 'portfolio', 'pbr', 'shader', 'postprocessing'] },
+{ q: 'github react spring animation', a: 'Powerful animation library for React. Physics-based spring presets, drag, flip, and viewport transitions. 30k stars.', tags: ['react', 'animation', 'spring', 'physics', 'motion'] },
+{ q: 'github framer-motion examples', a: 'Production-ready motion library examples: shared layout, stagger, group animations, gesture responder. 65k stars.', tags: ['framer', 'react', 'animation', 'layout', 'gesture'] },
+{ q: 'github gsap tween examples', a: 'GreenSock Animation Platform - advanced timeline, scrollTrigger, svg animations, bezier paths. 100k stars.', tags: ['gsap', 'animation', 'timeline', 'scroll', 'svg'] },
+{ q: 'github zustand state management', a: 'Batteries-included state management for React. Minimal API, TS support, middleware ecosystem. 50k stars.', tags: ['react', 'state', 'zustand', 'hooks', 'middleware'] },
+{ q: 'github radix-ui react', a: 'Radix Primitives - accessible, uncoded UI components. Theme, dialog, dropdown, popover, tabs. 40k stars.', tags: ['ui', 'components', 'accessibility', 'react', 'primitives'] },
+{ q: 'github shadcn-ui components', a: 'Copy/paste UI components built with Radix + Tailwind. Dark mode, responsive, accessibility first. 28k stars.', tags: ['tailwind', 'ui', 'components', 'shadcn', 'darkmode'] },
+{ q: 'github lucide icons react', a: 'Beautiful open source icons. 1500+ component variants. Tree-shakable, SVG, consistent style. 22k stars.', tags: ['icons', 'react', 'svg', 'lucide', 'ui'] },
+{ q: 'github threejs gpu particles', a: 'GPU-accelerated particle systems using instancing, compute shaders, and vertex textures. 8k stars.', tags: ['particles', 'gpu', 'threejs', 'instancing', 'compute'] },
+{ q: 'github shader-particles threejs', a: 'Advanced Three.js particle pipelines - point clouds, billboards, velocity fields. 12k stars.', tags: ['shader', 'particles', 'threejs', 'webgl', 'VFX'] },
+{ q: 'github postprocessing threejs', a: 'Postprocessing stack for Three.js - bloom, SSAO, volumetric lights, outline shader. 4k stars.', tags: ['postprocessing', 'threejs', 'bloom', 'ssao', 'webgl'] },
+{ q: 'github dat.gui examples', a: 'Lightweight GUI for changing variables in JavaScript. Debug panels, animation controls, shader tweaking. 4k stars.', tags: ['dat.gui', 'debug', 'gui', 'controls', 'webgl'] },
+{ q: 'github stats.js threejs', a: 'Display stats: fps, memory, render time. Essential for Three.js performance debugging. 1k stars.', tags: ['stats', 'performance', 'debug', 'webgl', 'threejs'] },
+{ q: 'github three-mesh-ui', a: 'Textured 3D UI for Three.js. Paragraph, link, button components rendered in 3D space. 2k stars.', tags: ['threejs', 'ui', 'text', '3d', 'html'] },
+{ q: 'github react-three-drei', a: 'Awesome helper functions for React Three Fiber. Helpers for loaders, orbitcontrols, meshline, gizmo. 15k stars.', tags: ['r3f', 'threejs', 'drei', 'helpers', 'react'] },
+{ q: 'github babylonjs playground', a: 'Babylon.js 3D engine with live code editor. Alternative to Three.js with built-in loaders. 3k stars.', tags: ['babylonjs', 'webgl', 'engine', 'playground', '3d'] },
+{ q: 'github octane render threejs', a: 'OctaneRender-inspired path tracer for Three.js. Real-time ray tracing, caustics, materials. 1.5k stars.', tags: ['raytrace', 'threejs', 'path', 'render', 'pbr'] },
+{ q: 'github react-three-fiber', a: 'Declarative WebGL library for React. Hooks for 3D, Suspense, lazy loading, custom shaders. 22k stars.', tags: ['threejs', 'react', 'webgl', 'hooks', 'r3f'] },
+{ q: 'github t-three example', a: 'Tinaco Three.js - opinionated Three.js setup with TypeScript, Vite, and modern patterns. 800 stars.', tags: ['threejs', 'setup', 'vite', 'typescript', 'boilerplate'] },
+{ q: 'github signal-vs-noise', a: 'Realtime shader animations and VFX. Audio-reactive, procedural patterns, studio-quality examples. 8k stars.', tags: ['shader', 'realtime', 'vfx', 'audio', 'procedural'] }
+
+
+// === CODING PATTERNS INJECTION - 2026-08-09 ===
+{ q: 'ecs pattern threejs', a: 'Entity Component System for Three.js - separation of data and logic. Fast for thousands of objects. Pattern: Entity(id), Component(data), System(process).', tags: ['ecs', 'pattern', 'architecture', 'performance', 'game'] },
+{ q: 'flyweight pattern graphics', a: 'Reuse geometry/material for thousands of instances. Memory efficient. Three.js example: InstancedMesh, shared geometries.', tags: ['flyweight', 'pattern', 'memory', 'graphics', 'threejs'] },
+{ q: 'observer pattern threejs', a: 'Use EventDispatcher for decoupled events. Watch for dispose, visibility changes, collisions. Standard Three.js pattern.', tags: ['observer', 'pattern', 'events', 'threejs', 'decoupled'] },
+{ q: 'command pattern undo', a: 'Turn actions into objects - execute, undo, redo. Perfect for build history. Store prevState, newState in Command objects.', tags: ['command', 'pattern', 'undo', 'history', 'architecture'] },
+{ q: 'factory pattern threejs', a: 'Create scenes/objects via factory functions. Abstract material loading, geometry creation. Clean separation.', tags: ['factory', 'pattern', 'threejs', 'objects', 'creation'] },
+{ q: 'state machine threejs ui', a: 'Finite state machine for UI modes - view, edit, play, settings. Uses enum states + transition functions + event handling.', tags: ['state-machine', 'pattern', 'ui', 'threejs', 'fsm'] },
+{ q: 'reactive programming rxjs', a: 'Observable streams for UI state, keyboard, mouse, animation frames. RxJS patterns for async data flows.', tags: ['rxjs', 'reactive', 'streams', 'async', 'pattern'] },
+{ q: 'middleware pattern web apps', a: 'Chain of processing functions before request reaches handler. auth, logging, validation, rate-limit.', tags: ['middleware', 'pattern', 'web', 'chain', 'http'] },
+{ q: 'strategy pattern rendering', a: 'Swap rendering algorithms at runtime. PointSprite, Mesh, Line, custom shader strategy.', tags: ['strategy', 'pattern', 'rendering', 'threejs', 'algorithm'] },
+{ q: 'proxy pattern threejs', a: 'Proxy objects to intercept get/set. Used for performance, lazy loading, change detection in Three.js.', tags: ['proxy', 'pattern', 'threejs', 'performance', 'lazy'] },

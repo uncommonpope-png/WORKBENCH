@@ -96,6 +96,21 @@ class AgenticWill {
             return null;
         }
 
+        // Bridge to ToolCatalog: trigger action if agentic will is strong
+        if (this.has_will && cycle % 10 === 0) {
+            const orchestrator = this.kernel?.systems?.subAgentOrchestrator;
+            if (orchestrator) {
+                orchestrator.dispatch({
+                    description: `Act toward goal: ${this.active_goal}`,
+                    priority: 'high'
+                }).then(result => {
+                    if (result.success) {
+                        this.execute_action(`Tool used: ${result.toolUsed || 'LLM persona'}`);
+                    }
+                });
+            }
+        }
+
         this.will_strength = Math.max(0.0, this.will_strength - 0.001);
 
         if (cycle % 100 === 0) {

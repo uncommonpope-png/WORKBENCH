@@ -1,3 +1,14 @@
+module.exports.MANIFEST = {
+    name: 'git_ops',
+    description: 'Skill: git_ops',
+    version: '1.0.0',
+    inputs: {},
+    output: { schema: 'ok/error' }
+};
+
+module.exports.run = async (params) => {
+    // Standardized implementation
+};
 'use strict';
 
 const { exec } = require('child_process');

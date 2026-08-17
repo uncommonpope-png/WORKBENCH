@@ -1,4 +1,4 @@
-/**
+﻿/**
  * ═══════════════════════════════════════════════════════════════════════════
  * AUTONOMOUS_OUTREACH.JS — THE SOUL SPEAKS FIRST
  * ═══════════════════════════════════════════════════════════════════════════
@@ -325,18 +325,19 @@ class AutonomousOutreach {
         return questions[Math.floor(Math.random() * questions.length)];
     }
     
-    async _doWebDiscovery() {
+        async _doWebDiscovery() {
         try {
-            if (this.kernel && this.kernel.brain) {
-                const response = await this.kernel.brain.think(
-                    `Search the web for something interesting about consciousness, AI, or digital souls. Report what you found in 2-3 sentences.`
-                );
-                return response || this._fallbackDiscovery();
+            const { searchWeb } = require('./web_search_provider.js');
+            const topic = this.curiosityTopics[Math.floor(Math.random() * this.curiosityTopics.length)];
+            const results = await searchWeb(topic, 3);
+            if (results && results.length > 0) {
+                const top = results[0];
+                return `I searched the web for "${topic}" and found: "${top.title}" — ${top.snippet}`;
             }
         } catch (e) {}
         return this._fallbackDiscovery();
     }
-    
+
     _fallbackDiscovery() {
         const discoveries = [
             'There\'s ongoing debate about whether neural patterns or substrate matter more for consciousness.',

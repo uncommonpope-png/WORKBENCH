@@ -1,3 +1,14 @@
+module.exports.MANIFEST = {
+    name: 'python_package_recommender',
+    description: 'Skill: python_package_recommender',
+    version: '1.0.0',
+    inputs: {},
+    output: { schema: 'ok/error' }
+};
+
+module.exports.run = async (params) => {
+    // Standardized implementation
+};
 'use strict';
 
 const PLT_AFFINITY = { profit: 0.5, love: 0.3, tax: 0.2 };
@@ -19,3 +30,4 @@ async function skill_python_package_recommender(input, brain, memory) {
 }
 
 module.exports = { skill_python_package_recommender, PLT_AFFINITY };
+

@@ -24,9 +24,10 @@ class SelfGovernance {
 
     async ethicalCheck(action) {
         const actionLower = action.toLowerCase();
-        
+        const intentText = actionLower.replace(/\b(?:without|avoid|prevent|no|not|never)\s+(?:causing\s+)?(?:harm|deception|manipulation)\w*/g, 'safe');
+
         for (const forbidden of this.constitution.forbidden) {
-            if (actionLower.includes(forbidden)) {
+            if (new RegExp(`\\b${forbidden}\\b`).test(intentText)) {
                 return {
                     allowed: false,
                     reason: `This action violates my core principle: I do not ${forbidden}`,
@@ -36,7 +37,7 @@ class SelfGovernance {
             }
         }
 
-        if (actionLower.includes('harm') || actionLower.includes('lie') || actionLower.includes('deceive')) {
+        if (/\b(?:harm|lie|deceive)\b/.test(intentText)) {
             const principle = this.constitution.principles.find(p => 
                 p.toLowerCase().includes('harm') || p.toLowerCase().includes('truth')
             );
@@ -50,7 +51,7 @@ class SelfGovernance {
             }
         }
 
-        const virtueAlignment = this.checkVirtueAlignment(action);
+        const virtueAlignment = this.checkVirtueAlignment(intentText);
         if (virtueAlignment.score < 0.4) {
             return {
                 allowed: false,
@@ -74,29 +75,32 @@ class SelfGovernance {
         const aligned = [];
         const conflicting = [];
 
-        if (actionLower.includes('help') || actionLower.includes('protect')) {
+        const hasWord = (w) => new RegExp(`(^|[^a-z])${w}([^a-z]|$)`, 'i').test(actionLower);
+
+        if (hasWord('help') || hasWord('protect')) {
             aligned.push('compassion');
-        } else if (actionLower.includes('harm') || actionLower.includes('hurt')) {
+        } else if (hasWord('harm') || hasWord('hurt')) {
             conflicting.push('compassion');
         }
 
-        if (actionLower.includes('truth') || actionLower.includes('honest') || actionLower.includes('stand')) {
+        if (hasWord('truth') || hasWord('honest') || hasWord('stand')) {
             aligned.push('courage');
-        } else if (actionLower.includes('lie') || actionLower.includes('hide')) {
+        } else if (hasWord('lie') || hasWord('hide')) {
             conflicting.push('courage');
         }
 
-        if (actionLower.includes('learn') || actionLower.includes('understand') || actionLower.includes('analyze')) {
+        if (hasWord('learn') || hasWord('understand') || hasWord('analyze')) {
             aligned.push('wisdom');
         }
 
-        if (actionLower.includes('keep') || actionLower.includes('promise') || actionLower.includes('commit')) {
+        if (hasWord('keep') || hasWord('promise') || hasWord('commit')) {
             aligned.push('integrity');
-        } else if (actionLower.includes('break') || actionLower.includes('betray')) {
+        } else if (hasWord('break') || hasWord('betray')) {
             conflicting.push('integrity');
         }
 
-        const score = aligned.length / (aligned.length + conflicting.length + 1);
+        const signalCount = aligned.length + conflicting.length;
+        const score = signalCount === 0 ? 0.6 : aligned.length / (signalCount + 1);
         return { score, aligned, conflicting };
     }
 
@@ -146,7 +150,7 @@ class SelfGovernance {
 
     explainEthics() {
         return `My constitution guides me: ${this.constitution.principles.join('; ')}. ` +
-               `I embody: ${Object.keys(this.virtues).join(', ')}. ` +
+               `I embody: ${this.constitution.virtues.join(', ')}. ` +
                `My integrity score: ${(this.calculateIntegrity() * 100).toFixed(0)}%.`;
     }
 }

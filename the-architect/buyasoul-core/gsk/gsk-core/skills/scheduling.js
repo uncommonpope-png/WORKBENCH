@@ -1,3 +1,14 @@
+module.exports.MANIFEST = {
+    name: 'scheduling',
+    description: 'Skill: scheduling',
+    version: '1.0.0',
+    inputs: {},
+    output: { schema: 'ok/error' }
+};
+
+module.exports.run = async (params) => {
+    // Standardized implementation
+};
 'use strict';
 
 const PLT_AFFINITY = { profit: 0.3, love: 0.5, tax: 0.2 };

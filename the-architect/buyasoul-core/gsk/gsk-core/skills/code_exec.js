@@ -1,3 +1,14 @@
+module.exports.MANIFEST = {
+    name: 'code_exec',
+    description: 'Skill: code_exec',
+    version: '1.0.0',
+    inputs: {},
+    output: { schema: 'ok/error' }
+};
+
+module.exports.run = async (params) => {
+    // Standardized implementation
+};
 'use strict';
 
 const fs = require('fs');

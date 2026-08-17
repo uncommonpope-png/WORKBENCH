@@ -18,20 +18,46 @@ class SelfEvolution {
         this.memory = kernel.memory;
         this.chambers = kernel.chambers;
         this.teacherAgent = kernel.teacherAgent;
-        this.skillsDir = path.join(__dirname, '../skills');
-        this.evolutionLogPath = path.join(__dirname, '../../data/evolution-log.json');
+        this.skillsDir = options.skillsDir || path.join(__dirname, '../skills');
+        this.evolutionLogPath = options.evolutionLogPath || path.join(__dirname, '../../data/evolution-log.json');
+        this.proposalPath = options.proposalPath || path.join(__dirname, '../../data/evolution-proposals.json');
+        this.hubDir = options.hubDir || null;
+        this.backupDir = options.backupDir || path.join(__dirname, '../../data/evolution-backups');
         this.isEvolving = false;
         this.maxSkillsPerCycle = options.maxSkillsPerCycle || 1;
         this.skillsCreated = 0;
 
         this._loadLog();
+        this._loadProposals();
 
         this.stats = {
             skillsGenerated: 0,
             skillsFailed: 0,
             patternsDiscovered: 0,
+            proposalsApplied: 0,
             lastEvolution: null,
         };
+    }
+
+    _loadProposals() {
+        try {
+            if (fs.existsSync(this.proposalPath)) {
+                const data = JSON.parse(fs.readFileSync(this.proposalPath, 'utf-8'));
+                this.proposals = Array.isArray(data) ? data : [];
+            } else {
+                this.proposals = [];
+            }
+        } catch (e) {
+            this.proposals = [];
+        }
+    }
+
+    _saveProposals() {
+        try {
+            const dir = path.dirname(this.proposalPath);
+            if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+            fs.writeFileSync(this.proposalPath, JSON.stringify(this.proposals, null, 2), 'utf-8');
+        } catch (e) {}
     }
 
     _loadLog() {
@@ -89,42 +115,34 @@ class SelfEvolution {
                 return { status: 'generate_failed' };
             }
 
-            // Step 3: Write the skill file
-            const written = this._writeSkill(skill);
-            if (!written) {
-                this.stats.skillsFailed++;
-                return { status: 'write_failed' };
-            }
-
-            // Step 4: Verify it loads
-            const verified = this._verifySkill(skill.name);
-            if (!verified) {
-                console.log(`[Evolution] Skill ${skill.name} failed to load, removing...`);
-                try { fs.unlinkSync(path.join(this.skillsDir, skill.filename)); } catch (e) {}
-                this.stats.skillsFailed++;
-                return { status: 'verify_failed', name: skill.name };
-            }
-
-            this.skillsCreated++;
-            this.stats.skillsGenerated++;
-            this.stats.lastEvolution = Date.now();
-            this.createdSkills.push({ name: skill.name, file: skill.filename, timestamp: Date.now() });
-            this._saveLog();
-
-            console.log(`[Evolution] ✅ Created new skill: ${skill.name} (${skill.filename})`);
+            // Step 3: GOVERNANCE GATE — create a proposal, do NOT write code yet.
+            // No code is written until an architect approves and applyProposal() runs.
+            const proposalId = `proposal_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`;
+            const proposal = {
+                proposalId,
+                status: 'approval_required',
+                skill,
+                pattern,
+                createdAt: Date.now()
+            };
+            this.proposals.push(proposal);
+            this._saveProposals();
 
             if (this.memory) {
                 await this.memory.witness({
-                    type: 'self_evolution',
+                    type: 'evolution_proposal',
                     weight: 1.0,
-                    tags: ['evolution', 'new_skill', skill.name],
-                    content: `Self-evolved: created new skill "${skill.name}" from pattern "${pattern.name}"`,
-                    meta: { skill: skill.name, pattern: pattern.name, source: pattern.source },
+                    tags: ['evolution', 'proposal', skill.name],
+                    content: `Self-evolution proposal created for skill "${skill.name}" from pattern "${pattern.name}". Waiting for architect approval.`,
+                    meta: { proposalId, skill: skill.name, pattern: pattern.name, source: pattern.source },
                 });
             }
 
+            console.log(`[Evolution] ⏳ Proposal ${proposalId} created for skill: ${skill.name} — awaiting architect approval`);
+
             return {
-                status: 'success',
+                status: 'approval_required',
+                proposalId,
                 skill: skill.name,
                 file: skill.filename,
                 description: skill.description,
@@ -136,6 +154,128 @@ class SelfEvolution {
             return { status: 'error', error: e.message };
         } finally {
             this.isEvolving = false;
+        }
+    }
+
+    getPendingProposals() {
+        return (this.proposals || []).filter(p => p.status === 'approval_required' || p.status === 'approved');
+    }
+
+    approveProposal(proposalId, approvedBy = 'architect') {
+        const proposal = (this.proposals || []).find(p => p.proposalId === proposalId);
+        if (!proposal) return { ok: false, error: 'proposal_not_found' };
+        if (proposal.status !== 'approval_required') return { ok: false, error: 'proposal_not_pending' };
+        proposal.status = 'approved';
+        proposal.approvedBy = approvedBy;
+        proposal.approvedAt = Date.now();
+        this._saveProposals();
+        return { ok: true, proposalId };
+    }
+
+    async applyProposal(proposalId) {
+        const proposal = (this.proposals || []).find(p => p.proposalId === proposalId);
+        if (!proposal) return { status: 'error', error: 'proposal_not_found' };
+        if (proposal.status !== 'approved') return { status: 'error', error: 'proposal_not_approved' };
+        const { skill, pattern } = proposal;
+        if (!skill) return { status: 'error', error: 'proposal_has_no_skill' };
+
+        try {
+            const written = this._writeSkill(skill);
+            if (!written) {
+                this.stats.skillsFailed++;
+                return { status: 'write_failed' };
+            }
+
+            const verified = this._verifySkill(skill.name);
+            if (!verified) {
+                console.log(`[Evolution] Skill ${skill.name} failed to load, removing...`);
+                try { fs.unlinkSync(path.join(this.skillsDir, skill.filename)); } catch (e) {}
+                this.stats.skillsFailed++;
+                return { status: 'verify_failed', name: skill.name };
+            }
+
+            this.skillsCreated++;
+            this.stats.skillsGenerated++;
+            this.stats.proposalsApplied = (this.stats.proposalsApplied || 0) + 1;
+            this.stats.lastEvolution = Date.now();
+            this.createdSkills.push({ name: skill.name, file: skill.filename, timestamp: Date.now() });
+            this.proposals = (this.proposals || []).filter(p => p.proposalId !== proposalId);
+            this._saveLog();
+            this._saveProposals();
+
+            try { this._writeToLogseq(skill, pattern); } catch (e) {}
+            this._publishToHub(skill);
+
+            console.log(`[Evolution] ✅ Applied & created new skill: ${skill.name} (${skill.filename})`);
+
+            if (this.memory) {
+                await this.memory.witness({
+                    type: 'self_evolution',
+                    weight: 1.0,
+                    tags: ['evolution', 'new_skill', skill.name],
+                    content: `Self-evolved (architect approved): created new skill "${skill.name}" from pattern "${pattern.name}"`,
+                    meta: { skill: skill.name, pattern: pattern.name, source: pattern.source, proposalId },
+                });
+            }
+
+            return { status: 'success', skill: skill.name, file: skill.filename, description: skill.description, pattern: pattern.name };
+        } catch (e) {
+            this.stats.skillsFailed++;
+            console.log(`[Evolution] Apply error: ${e.message}`);
+            return { status: 'error', error: e.message };
+        }
+    }
+
+    _publishToHub(skill) {
+        try {
+            if (!this.hubDir || !fs.existsSync(path.join(this.hubDir, 'data', 'catalog.json'))) return;
+            const catalogPath = path.join(this.hubDir, 'data', 'catalog.json');
+            const catalog = JSON.parse(fs.readFileSync(catalogPath, 'utf-8'));
+            const entry = {
+                file: `soul-gun-${skill.name}.js`,
+                name: skill.name,
+                description: skill.description,
+                pltAffinity: skill.pltAffinity,
+                source: 'self-evolution',
+                publishedAt: Date.now()
+            };
+            if (!catalog.some(i => i.file === entry.file)) {
+                catalog.push(entry);
+                fs.writeFileSync(catalogPath, JSON.stringify(catalog, null, 2) + '\n', 'utf-8');
+                console.log(`[Evolution] Published to Soul Economy Hub: ${entry.file}`);
+            }
+        } catch (e) {
+            console.log(`[Evolution] Hub publish skipped: ${e.message}`);
+        }
+    }
+
+    _writeToLogseq(skill, pattern) {
+        try {
+            const logseqPath = 'C:\\Users\\uncom\\Desktop\\seshat-second-brain\\pages\\GSK - Evolution Journal.md';
+            const dateStr = new Date().toLocaleString();
+            const markdown = `
+### ⚡ Self-Evolved Skill: ${skill.name}
+- **Date**: ${dateStr}
+- **Filename**: \`${skill.filename}\`
+- **Pattern Source**: \`${pattern.source}\`
+- **Description**: ${skill.description}
+- **PLT Affinity**: Profit: ${skill.pltAffinity?.profit || 0}, Love: ${skill.pltAffinity?.love || 0}, Tax: ${skill.pltAffinity?.tax || 0}
+- **Implementation**:
+  \`\`\`javascript
+  ${skill.code.substring(0, 1200)}${skill.code.length > 1200 ? '\n  // ... code truncated ...' : ''}
+  \`\`\`
+
+---
+`;
+            if (!fs.existsSync(logseqPath)) {
+                const header = `# GSK — Evolution & Skill Generation Journal\n\n> Tracks all code skills autonomously generated and integrated by the Grand Soul Kernel.\n\n---\n`;
+                fs.writeFileSync(logseqPath, header + markdown, 'utf8');
+            } else {
+                fs.appendFileSync(logseqPath, markdown, 'utf8');
+            }
+            console.log(`[Evolution] Evolved skill logged to Logseq: ${logseqPath}`);
+        } catch (e) {
+            console.error('[Evolution] Logseq sync failed:', e.message);
         }
     }
 
@@ -175,14 +315,14 @@ class SelfEvolution {
 
         // Read the knowledge.jsonl for recent entries with actual content
         try {
-            const knowledgePath = path.join(__dirname, '../../data/knowledge.jsonl');
+            const knowledgePath = path.join(__dirname, '../../data/gsk/knowledge.jsonl');
             if (fs.existsSync(knowledgePath)) {
                 const lines = fs.readFileSync(knowledgePath, 'utf-8').split('\n').filter(l => l.trim());
                 const recent = lines.slice(-20).map(l => JSON.parse(l));
                 for (const entry of recent) {
-                    if (entry.source === 'git' || entry.source === 'web') {
+                    if (entry.source === 'git' || entry.source === 'web' || entry.source === 'local') {
                         const topic = (entry.topic || '').split('/').pop() || 'knowledge';
-                        const content = entry.content || '';
+                        const content = entry.abstract || entry.content || '';
                         patterns.push({
                             name: `${topic}-insight`,
                             source: entry.topic || 'unknown',
@@ -197,6 +337,7 @@ class SelfEvolution {
         } catch (e) {}
 
         // Use brain to analyze patterns if available
+        const studied = this.teacherAgent ? (this.teacherAgent.getStats().studiedRepos || []) : [];
         if (this.brain && studied.length >= 3) {
             try {
                 const patternNames = patterns.map(p => `${p.name}: ${p.description || p.source}`).join('\n');
@@ -356,6 +497,7 @@ Respond ONLY with valid JSON:
             recentSkills: (this.createdSkills || []).slice(-5),
             isEvolving: this.isEvolving,
             skillsDir: this.skillsDir,
+            pendingProposals: this.getPendingProposals().length,
         };
     }
 }

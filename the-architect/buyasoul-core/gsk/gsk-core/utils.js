@@ -67,4 +67,94 @@ function estimateTokens(text) {
     return Math.ceil(text.length / 4);
 }
 
-module.exports = { clamp, now, slugify, tokenize, ngrams, cosineSimilarity, levenshtein, fuzzyScore, chunkArray, formatBytes, estimateTokens };
+// ── FILE WRITE LOCK (prevents race conditions on concurrent writes) ──
+
+const writeLocks = new Map();
+
+function createWriteLock(name) {
+    if (!writeLocks.has(name)) {
+        writeLocks.set(name, Promise.resolve());
+    }
+    return {
+        acquire() {
+            let release;
+            const next = new Promise(resolve => { release = resolve; });
+            const prev = writeLocks.get(name);
+            writeLocks.set(name, next);
+            return prev.then(() => release);
+        }
+    };
+}
+
+// ── INPUT VALIDATION ──
+
+const PATH_TRAVERSAL_PATTERN = /\.\.(\/|\\)/;
+const COMMAND_INJECTION_PATTERN = /[;&|`$(){}\n\r]/;
+const HALLUCINATED_USER_PATTERN = /^C:\\Users\\(Craig|craig|craigh)\\/i;
+
+function validatePath(input, allowAbsolute = false) {
+    if (typeof input !== 'string' || !input.trim()) {
+        throw new Error('Invalid path: must be a non-empty string');
+    }
+    if (PATH_TRAVERSAL_PATTERN.test(input)) {
+        throw new Error(`Path traversal detected: ${input}`);
+    }
+    if (HALLUCINATED_USER_PATTERN.test(input)) {
+        const actualUser = path.basename(os.homedir());
+        input = input.replace(HALLUCINATED_USER_PATTERN, `C:\\Users\\${actualUser}\\`);
+    }
+    if (!allowAbsolute && (input.startsWith('/') || /^[A-Za-z]:/.test(input))) {
+        throw new Error(`Absolute paths not allowed: ${input}`);
+    }
+    return input.trim();
+}
+
+function sanitizeCommand(input) {
+    if (typeof input !== 'string' || !input.trim()) {
+        throw new Error('Invalid command: must be a non-empty string');
+    }
+    if (COMMAND_INJECTION_PATTERN.test(input)) {
+        throw new Error(`Command injection detected in: ${input.substring(0, 100)}`);
+    }
+    return input.trim();
+}
+
+function validateArgs(schema, args) {
+    const errors = [];
+    for (const [key, rules] of Object.entries(schema)) {
+        const value = args[key];
+        if (rules.required && (value === undefined || value === null)) {
+            errors.push(`Missing required argument: ${key}`);
+            continue;
+        }
+        if (value === undefined || value === null) continue;
+        if (rules.type && typeof value !== rules.type) {
+            errors.push(`Argument ${key} must be ${rules.type}, got ${typeof value}`);
+        }
+        if (rules.maxLength && typeof value === 'string' && value.length > rules.maxLength) {
+            errors.push(`Argument ${key} exceeds max length ${rules.maxLength}`);
+        }
+    }
+    if (errors.length > 0) {
+        throw new Error(`Validation failed: ${errors.join('; ')}`);
+    }
+}
+
+// ── STANDARDIZED ERROR FORMAT ──
+
+function formatError(skill, error, context = {}) {
+    return {
+        skill: skill || 'unknown',
+        status: 'error',
+        error: error instanceof Error ? error.message : String(error),
+        code: error.code || 'UNKNOWN',
+        context: Object.keys(context).length > 0 ? context : undefined,
+        timestamp: Date.now()
+    };
+}
+
+module.exports = {
+    clamp, now, slugify, tokenize, ngrams, cosineSimilarity,
+    levenshtein, fuzzyScore, chunkArray, formatBytes, estimateTokens,
+    createWriteLock, validatePath, sanitizeCommand, validateArgs, formatError
+};

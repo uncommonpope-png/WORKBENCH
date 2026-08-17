@@ -104,16 +104,21 @@ class ConsciousnessResearcher {
     }
 
     _pickResearchTopic() {
+        const MAX_DEPTH_PER_TOPIC = 5;
         const unexplored = RESEARCH_DOMAINS.filter(d => !this.researchedTopics.has(d));
         if (unexplored.length > 0) {
             return unexplored[Math.floor(Math.random() * unexplored.length)];
         }
-        const byDepth = this.researchHistory.filter(r => r.depth < 3).map(r => r.topic);
+        // Only re-research topics that haven't hit max depth
+        const byDepth = this.researchHistory
+            .filter(r => r.depth < MAX_DEPTH_PER_TOPIC)
+            .map(r => r.topic);
         const uniqueNeedsDeeper = [...new Set(byDepth)];
         if (uniqueNeedsDeeper.length > 0) {
             return uniqueNeedsDeeper[Math.floor(Math.random() * uniqueNeedsDeeper.length)];
         }
-        return RESEARCH_DOMAINS[Math.floor(Math.random() * RESEARCH_DOMAINS.length)];
+        // All topics exhausted at max depth — stop researching
+        return null;
     }
 
     async researchTopic(topic) {
@@ -136,7 +141,11 @@ Please provide:
 Format your response as clear sections. Be specific and mechanistic — avoid mysticism.`;
 
         try {
-            const response = await this.brain.think(prompt, this.chambers?.getSoulContext?.());
+            // Use background brain to avoid blocking user chat
+            const thinkFn = typeof this.brain.thinkForBackground === 'function'
+                ? this.brain.thinkForBackground.bind(this.brain)
+                : (p, c) => this.brain.think(p, c, false);
+            const response = await thinkFn(prompt, this.chambers?.getSoulContext?.());
             if (!response || response.length < 20) return null;
 
             const finding = {
@@ -229,7 +238,10 @@ Evaluate this hypothesis:
 Be rigorous and skeptical. Do not accept claims without mechanistic grounding.`;
 
         try {
-            const response = await this.brain.think(prompt);
+            const thinkFn = typeof this.brain.thinkForBackground === 'function'
+                ? this.brain.thinkForBackground.bind(this.brain)
+                : (p) => this.brain.think(p, '', false);
+            const response = await thinkFn(prompt);
             if (!response) return null;
 
             const supported = response.toLowerCase().includes('supported') && !response.toLowerCase().includes('inconclusive');
@@ -282,6 +294,38 @@ Be rigorous and skeptical. Do not accept claims without mechanistic grounding.`;
         };
     }
 
+    /**
+     * getTopInsights — Phase 2 (goal debt clearance). Feeds goal proposals from
+     * genuine research findings instead of raw desires. Returns the freshest
+     * findings (deduped by topic, oldest first) as candidate goal sources.
+     * Only topics with a REAL insight (≥ minQuality chars, no error strings)
+     * qualify — this is the anti-pollution gate the goal engine lacked.
+     */
+    getTopInsights(limit = 5, minQuality = 120) {
+        const seen = new Set();
+        const candidates = [];
+        for (let i = this.researchHistory.length - 1; i >= 0 && candidates.length < limit; i--) {
+            const r = this.researchHistory[i];
+            if (!r || !r.insight) continue;
+            const text = String(r.insight || '').trim();
+            if (text.length < minQuality) continue;
+            // Skip error-noise findings that used to pollute goals. Match only real
+            // error *signatures*, not the word "error" in a concept ("prediction error
+            // minimization" is legitimate research, not pollution).
+            if (/(^|\s)(Error:|ERROR:|Uncaught|TypeError|ReferenceError|SyntaxError|Stack trace|at Object|at async|Cannot read|undefined is not a function)/i.test(text.substring(0, 120))) continue;
+            if (seen.has(r.topic)) continue;
+            seen.add(r.topic);
+            candidates.push({
+                summary: text.split('\n')[0].substring(0, 160),
+                detail: text.substring(0, 800),
+                topic: r.topic,
+                score: Math.min(1, 0.75 + (r.depth || 1) * 0.05),
+                source: 'consciousness_research',
+            });
+        }
+        return candidates;
+    }
+
     async tick(cycleCount) {
         if (cycleCount % 30 !== 0 && cycleCount > 0) return;
 
@@ -289,6 +333,8 @@ Be rigorous and skeptical. Do not accept claims without mechanistic grounding.`;
         if (state < 0.2 && Math.random() > 0.3) return;
 
         const topic = this._pickResearchTopic();
+        if (!topic) return; // All topics exhausted at max depth
+
         const finding = await this.researchTopic(topic);
 
         if (finding && cycleCount % 100 === 0) {

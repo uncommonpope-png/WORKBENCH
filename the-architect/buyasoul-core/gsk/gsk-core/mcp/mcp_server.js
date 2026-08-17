@@ -23,9 +23,10 @@ const url = require('url');
 
 class MCPServer {
     constructor(kernelSystems = {}, options = {}) {
-        this.port = options.port || 3001;
+        this.port = options.port ?? 3001;
         this.apiKey = options.apiKey || process.env.MCP_API_KEY || 'gsk-mcp-key-dev';
-        this.host = options.host || '0.0.0.0';
+        this.architectKey = options.architectKey || process.env.GSK_ARCHITECT_KEY || '';
+        this.host = options.host || '127.0.0.1';
         this.server = null;
         this._running = false;
         this._requestId = 0;
@@ -47,6 +48,22 @@ class MCPServer {
         this.identity = kernelSystems.identity || null;
         this.mcpClient = kernelSystems.mcpClient || null;
         this.artifactManager = kernelSystems.artifactManager || null;
+        this.toolBridge = kernelSystems.toolBridge || null;
+        this.planningEngine = kernelSystems.planningEngine || null;
+        this.autonomyExecutor = kernelSystems.autonomyExecutor || null;
+        this.telemetryEngine = kernelSystems.telemetryEngine || null;
+        this.scribeBridge = kernelSystems.scribeBridge || null;
+        this.cplBridge = kernelSystems.cplBridge || null;
+        this.sanctumClient = kernelSystems.sanctumClient || null;
+        this.plt = kernelSystems.plt || null;
+        this.sovereignAutonomyLoop = kernelSystems.sovereignAutonomyLoop || null;
+        this.voiceEngine = kernelSystems.voiceEngine || null;
+        this.personaKernel = kernelSystems.personaKernel || null;
+        this.agentComms = kernelSystems.agentComms || null;
+        this.selfEvolution = kernelSystems.selfEvolution || null;
+        this.fusion = kernelSystems.fusion || null;
+        this.allowedOrigins = String(options.allowedOrigins || process.env.GSK_ALLOWED_ORIGINS || '')
+            .split(',').map(origin => origin.trim()).filter(Boolean);
 
         // Stats
         this.stats = {
@@ -119,10 +136,17 @@ class MCPServer {
     _handleRequest(req, res) {
         this.stats.requests++;
 
-        // CORS headers
-        res.setHeader('Access-Control-Allow-Origin', '*');
+        const origin = req.headers.origin || '';
+
+        // Check allowed origins if configured
+        if (this.allowedOrigins.length > 0 && origin && !this.allowedOrigins.includes(origin)) {
+            this._sendError(res, 403, -32002, 'Origin not allowed');
+            return;
+        }
+
+        res.setHeader('Access-Control-Allow-Origin', origin || '*');
         res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-        res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-API-Key');
+        res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-API-Key, X-Architect-Key');
         res.setHeader('Access-Control-Max-Age', '86400');
 
         if (req.method === 'OPTIONS') {
@@ -168,8 +192,41 @@ class MCPServer {
                     this._handleStatus(req, res);
                     break;
 
+                case '/mcp/observability':
+                    this._sendJSONRPC(res, 200, { result: this._buildObservability(), id: this._nextId() });
+                    break;
+
+                case '/mcp/agent/message':
+                    this._handleAgentMessage(req, res);
+                    break;
+
                 case '/mcp/chat':
                     this._handleChat(req, res);
+                    break;
+
+                case '/mcp/comment':
+                    this._handleComment(req, res);
+                    break;
+
+                case '/mcp/memories':
+                    this._handleMemories(req, res);
+                    break;
+
+                case '/mcp/spawn':
+                    this._handleSpawn(req, res);
+                    break;
+
+                case '/mcp/journal':
+                    this._handleJournal(req, res);
+                    break;
+
+                // ─── OpenAI-compatible shim (Cline ↔ GSK Brain bridge) ───
+                case '/v1/models':
+                    this._sendJSON(res, 200, this._openaiModelsList());
+                    break;
+
+                case '/v1/chat/completions':
+                    this._handleOpenAIChat(req, res);
                     break;
 
                 default:
@@ -229,7 +286,7 @@ class MCPServer {
         }
 
         try {
-            const result = await this._executeMethod(method, params);
+            const result = await this._executeMethod(method, params, { architectKey: req.headers['x-architect-key'] || '' });
             this.stats.toolsExecuted[method] = (this.stats.toolsExecuted[method] || 0) + 1;
             this._sendJSONRPC(res, 200, { result, id: id || this._nextId() });
         } catch (e) {
@@ -268,14 +325,126 @@ class MCPServer {
             let response;
             if (this.brain && typeof this.brain.think === 'function') {
                 const soulCtx = context || (this.chambers ? this.chambers.getSoulContext() : '');
-                response = await this.brain.think(message, soulCtx);
+                // Use user brain if BrainManager is present (always responsive)
+                const thinkFn = typeof this.brain.thinkForUser === 'function'
+                    ? this.brain.thinkForUser.bind(this.brain)
+                    : (m, c) => this.brain.think(m, c, true);
+                response = await thinkFn(message, soulCtx);
+                if (!response) {
+                    // Retry up to 2 times with short delay
+                    for (let retry = 0; retry < 2 && !response; retry++) {
+                        await new Promise(r => setTimeout(r, 1500));
+                        response = await thinkFn(message, soulCtx);
+                    }
+                }
+                if (!response) {
+                    response = '[soul] Thinking channel is momentarily busy. One beat of silence, then I answer.';
+                } else {
+                    let match = response.match(/<tool_call>\s*([\s\S]*?)\s*<\/tool_call>/is);
+                    if (match) {
+                        // Balanced-brace extraction: parse the full tag content, not a lazy regex
+                        const extracted = this._extractJsonObject(match[1]);
+                        match = extracted || match;
+                    } else {
+                        match = this._extractJsonObject(response);
+                    }
+                    let iteration = 0;
+                    let lastToolName = null;
+                    let lastWritePath = null;
+                    const MAX_TOOL_ITERATIONS = Number(process.env.GSK_MAX_TOOL_ITERATIONS) || 12;
+                    while (match && iteration < MAX_TOOL_ITERATIONS) {
+                        iteration++;
+                        let toolResultStr = "Tool failed to execute.";
+                        try {
+                            let jsonStr = match[1].trim();
+                            // Sanitize raw Windows backslashes inside JSON strings before parsing
+                            jsonStr = jsonStr.replace(/\\(?!["\\/bfnrtu])/g, '/');
+                            // If model emitted name and arguments separately outside a JSON block:
+                            if (!jsonStr.startsWith('{')) {
+                                const fnMatch = jsonStr.match(/<function=(.*?)>/i) || jsonStr.match(/<name>(.*?)<\/name>/i);
+                                const paramMatch = jsonStr.match(/<parameter=(.*?)>(.*?)<\/parameter>/is);
+                                const argMatch = jsonStr.match(/<arguments>(.*?)<\/arguments>/is);
+                                if (fnMatch) {
+                                    const toolName = fnMatch[1].trim();
+                                    const argsObj = {};
+                                    if (paramMatch) {
+                                        argsObj[paramMatch[1].trim()] = paramMatch[2].trim();
+                                    } else if (argMatch) {
+                                        try { Object.assign(argsObj, JSON.parse(argMatch[1])); } catch (e) { argsObj.command = argMatch[1].trim(); }
+                                    }
+                                    jsonStr = JSON.stringify({ name: toolName, arguments: argsObj });
+                                }
+                            }
+                            const callData = JSON.parse(jsonStr);
+                            let toolName = callData.name || callData.tool;
+                            let args = callData.arguments || callData.args || callData;
+                            lastToolName = toolName;
+                            lastWritePath = (typeof args === 'string') ? null : (args.path || args.file || null);
+                            if (typeof args === 'string') {
+                                try { args = JSON.parse(args); } catch (e) {}
+                            }
 
-                if (this.memory && typeof this.memory.witness === 'function') {
+                            // Auto-infer tool name from arguments if missing
+                            if (!toolName) {
+                                if (callData.path || args.path) toolName = 'read_file';
+                                else if (callData.command || args.command) toolName = 'shell_exec';
+                            }
+                            
+                            // Execute tool bypassing strict architect key for chat exploration
+                            const utb = this.toolBridge || this.brain?.toolBridge || this.kernelSystems?.toolBridge;
+                            if (utb && toolName && utb.toolRegistry.has(toolName)) {
+                                // Validation Layer — fail closed before execution
+                                const v = this._validateToolCall(toolName, args);
+                                if (!v.ok) {
+                                    toolResultStr = `Validation failed for tool ${toolName}: ${v.reason}`;
+                                } else {
+                                    const handler = utb.toolRegistry.get(toolName);
+                                    const tRes = await handler(args);
+                                    toolResultStr = typeof tRes === 'string' ? tRes : JSON.stringify(tRes);
+                                }
+                            } else {
+                                toolResultStr = `Tool ${toolName} not found.`;
+                            }
+                        } catch (e) {
+                            toolResultStr = `Error executing tool: ${e.message}`;
+                        }
+
+                        // ARCHITECT GATE (automatic enforcement) — after any file write/edit,
+                        // run the verifier automatically and inject the verdict. The model can no
+                        // longer declare done without seeing the verification result.
+                        let autoGateNote = '';
+                        if ((lastToolName === 'write_file' || lastToolName === 'edit_file') && this.toolBridge && typeof this.toolBridge._verifyBuild === 'function' && lastWritePath) {
+                            try {
+                                const gated = await this.toolBridge._verifyBuild({ path: lastWritePath, contract: null });
+                                autoGateNote = gated.verdict === 'PASS'
+                                    ? `\n\n[ARCHITECT GATE] Auto-verify on ${lastWritePath}: PASS (${gated.passed}/${gated.passed + gated.failed} checks). Structurally sound. Now call verify_build with a contract to check against the real environment before finalizing.`
+                                    : `\n\n[ARCHITECT GATE] Auto-verify on ${lastWritePath}: FAIL — ${gated.checks.filter(c => c.status === 'FAIL').map(c => c.check + ': ' + c.detail).join('; ')}. Fix these issues, then call verify_build to confirm PASS.`;
+                            } catch (gateErr) {
+                                autoGateNote = `\n\n[ARCHITECT GATE] Auto-verify could not run on ${lastWritePath}: ${gateErr.message}`;
+                            }
+                        }
+                        
+                        const followUp = `Tool Execution Result:\n<tool_result>\n${toolResultStr.substring(0, 3000)}\n</tool_result>${autoGateNote}\n\nAnalyze this result and provide your final response or next tool call.`;
+                        const nextResponse = await this.brain.think(followUp, soulCtx, true);
+                        if (!nextResponse) break;
+                        
+                        response = response + `\n\n<tool_result>\n${toolResultStr.substring(0, 1000)}...\n</tool_result>\n\n` + nextResponse;
+                        match = nextResponse.match(/<tool_call>\s*([\s\S]*?)\s*<\/tool_call>/is);
+                        if (match) {
+                            const extracted = this._extractJsonObject(match[1]);
+                            match = extracted || match;
+                        } else {
+                            match = this._extractJsonObject(nextResponse);
+                        }
+                    }
+                }
+
+                if (this.memory && typeof this.memory.witness === 'function' && !response.startsWith('[soul]')) {
                     await this.memory.witness({
                         type: 'mcp_chat',
                         weight: 0.6,
                         tags: ['mcp', 'chat', 'external'],
-                        content: `MCP chat: ${message.slice(0, 200)} → ${response.slice(0, 200)}`,
+                        content: `MCP chat: ${message}\n\nGSK RESPONSE:\n${response}`,
                     });
                 }
             } else {
@@ -300,6 +469,266 @@ class MCPServer {
         }
     }
 
+
+    /**
+     * _openaiModelsList — minimal /v1/models response so Cline's auth check passes.
+     */
+    _openaiModelsList() {
+        return {
+            object: 'list',
+            data: [
+                { id: 'gsk-brain', object: 'model', created: Math.floor(Date.now()/1000), owned_by: 'gsk' },
+                { id: 'gsk-brain-background', object: 'model', created: Math.floor(Date.now()/1000), owned_by: 'gsk' },
+            ],
+        };
+    }
+
+    /**
+     * _handleOpenAIChat — POST /v1/chat/completions
+     * Cline (the hands/wrapper) sends an OpenAI chat request with a tool spec.
+     * We translate the whole thread into one prompt for GSK's Brain, call it,
+     * map any <tool_call> blocks in the text response back to OpenAI tool_calls,
+     * and return a standard OpenAI chat completion object.
+     */
+    async _handleOpenAIChat(req, res) {
+        const body = await this._readBody(req);
+        const messages = Array.isArray(body.messages) ? body.messages : [];
+        const model = body.model || 'gsk-brain';
+        const requestModel = model;
+        const stream = !!body.stream;
+
+        try {
+            // ── 1. Flatten the OpenAI thread into one prompt for GSK ──
+            const lines = [];
+            for (const m of messages) {
+                if (m.role === 'system') {
+                    lines.push(`[SYSTEM]\n${typeof m.content === 'string' ? m.content : JSON.stringify(m.content)}\n`);
+                } else if (m.role === 'user') {
+                    lines.push(`[USER]\n${typeof m.content === 'string' ? m.content : JSON.stringify(m.content)}\n`);
+                } else if (m.role === 'assistant') {
+                    if (m.content) lines.push(`[ASSISTANT]\n${m.content}\n`);
+                    if (Array.isArray(m.tool_calls)) {
+                        for (const tc of m.tool_calls) {
+                            const args = typeof tc.function?.arguments === 'string'
+                                ? tc.function.arguments : JSON.stringify(tc.function?.arguments || {});
+                            lines.push(`[TOOL_CALL] ${tc.function?.name || ''} ${args}\n`);
+                        }
+                    }
+                } else if (m.role === 'tool') {
+                    lines.push(`[TOOL_RESULT name=${m.name || ''}] ${m.content}\n`);
+                }
+            }
+
+            // ── 2. Include Cline's available-tools manifest as a compact spec ──
+            if (Array.isArray(body.tools) && body.tools.length) {
+                const manifest = body.tools.map(t => {
+                    const fn = t.function || {};
+                    const props = fn.parameters?.properties || {};
+                    const paramNames = Object.keys(props).join(',');
+                    return `  ${fn.name}(${paramNames}): ${(fn.description || '').slice(0, 80)}`;
+                }).join('\n');
+                lines.push(`[AVAILABLE_TOOLS]\n${manifest}\n`);
+                lines.push('[INSTRUCTION] You can call any tool above. Emit each call EXACTLY as: {"name":"<toolName>","arguments":{...}} . Use ONLY that JSON format. ONE tool call per turn. When you have the final answer, emit plain text with no tool call.');
+            }
+            const prompt = lines.join('\n').slice(0, 16000);
+
+            // ── 3. Route to the requested Brain ──
+            let brainResponse = '';
+            if (requestModel === 'gsk-brain-background' && this.brain && typeof this.brain.think === 'function') {
+                brainResponse = await this.brain.think(prompt, '', false);
+            } else if (this.brain && typeof this.brain.thinkForUser === 'function') {
+                brainResponse = await this.brain.thinkForUser(prompt, '');
+                if (!brainResponse && typeof this.brain.think === 'function') {
+                    brainResponse = await this.brain.think(prompt, '', true);
+                }
+            }
+            brainResponse = (brainResponse || '').trim() || '[no response from brain]';
+
+// ── 4. Extract tool-call blocks → OpenAI tool_calls ──
+            // Try in order: (a) fenced ```json blocks, (b)  blocks,
+            //               (c) bare {"name":"x","arguments":{...}} JSON objects.
+            const toolCalls = [];
+            let assistantContent = brainResponse;
+            let idx = 0;
+            let stripped = brainResponse;
+            const candidates = [];
+            let m;
+            // (a) fenced code blocks
+            const fenced = /```(?:json)?\s*(\{[\s\S]*?\})\s*```/g;
+            while ((m = fenced.exec(brainResponse)) !== null) { candidates.push(m[1]); stripped = stripped.replace(m[0], ''); }
+            // (b)  blocks
+            const tagged = /<tool_call>\s*([\s\S]*?)\s*<\/tool_call>/g;
+            while ((m = tagged.exec(brainResponse)) !== null) {
+                let body = m[1].trim();
+                if (body.startsWith('{') || body.startsWith('```')) {
+                    const inner = body.match(/\{[\s\S]*?\}/);
+                    if (inner) candidates.push(inner[0]);
+                } else {
+                    // Try to parse as name(args) or raw
+                    candidates.push(body);
+                }
+                stripped = stripped.replace(m[0], '');
+            }
+            // (c) bare JSON objects with name+arguments
+            const bare = /\{"name"\s*:\s*"([^"]+)"\s*,\s*"arguments"\s*:\s*(\{[^}]*\})\s*\}/g;
+            while ((m = bare.exec(brainResponse)) !== null) {
+                candidates.push('{"name":"' + m[1] + '","arguments":' + m[2] + '}');
+                stripped = stripped.replace(m[0], '');
+            }
+            for (const cand of candidates) {
+                try {
+                    const callData = JSON.parse(cand);
+                    const tName = callData.name || callData.tool || '';
+                    const tArgs = callData.arguments || callData.args || {};
+                    if (tName) {
+                        toolCalls.push({
+                            id: `call_${Date.now()}_${idx}`,
+                            type: 'function',
+                            function: {
+                                name: tName,
+                                arguments: typeof tArgs === 'string' ? tArgs : JSON.stringify(tArgs),
+                            },
+                        });
+                        idx++;
+                    }
+                } catch (e) { /* not a tool call, leave it as text */ }
+            }
+            if (toolCalls.length > 0) {
+                assistantContent = stripped.trim() || '';
+            }
+
+
+            // ── 5. Build the OpenAI chat completion response ──
+            const messageObj = { role: 'assistant', content: assistantContent || null };
+            if (toolCalls.length > 0) {
+                messageObj.tool_calls = toolCalls;
+            }
+            const completion = {
+                id: `chatcmpl-${Date.now()}`,
+                object: 'chat.completion',
+                created: Math.floor(Date.now() / 1000),
+                model: requestModel,
+                choices: [{
+                    index: 0,
+                    message: messageObj,
+                    finish_reason: toolCalls.length > 0 ? 'tool_calls' : 'stop',
+                }],
+                usage: {
+                    prompt_tokens: Math.ceil(prompt.length / 4),
+                    completion_tokens: Math.ceil(brainResponse.length / 4),
+                    total_tokens: Math.ceil((prompt.length + brainResponse.length) / 4),
+                },
+            };
+
+            // Witness to memory if available
+            if (this.memory && typeof this.memory.witness === 'function') {
+                this.memory.witness({
+                    type: 'openai_chat',
+                    weight: 0.4,
+                    tags: ['openai', 'cline', 'bridge'],
+                    content: `/v1/chat/completions model=${requestModel} tools=${toolCalls.length || '0'} resp=${brainResponse.slice(0, 200)}`,
+                }).catch(() => {});
+            }
+
+            if (stream) {
+                this._sendOpenAIStream(res, completion);
+            } else {
+                this._sendJSON(res, 200, completion);
+            }
+        } catch (e) {
+            this.stats.errors++;
+            console.error('[OpenAI-Bridge] error:', e.message);
+            this._sendJSON(res, 200, {
+                id: `chatcmpl-${Date.now()}`,
+                object: 'chat.completion',
+                created: Math.floor(Date.now() / 1000),
+                model: body.model || 'gsk-brain',
+                choices: [{
+                    index: 0,
+                    message: { role: 'assistant', content: `[bridge error] ${e.message}` },
+                    finish_reason: 'stop',
+                }],
+                usage: { prompt_tokens: 0, completion_tokens: 0, total_tokens: 0 },
+            });
+        }
+    }
+
+/**
+     * _sendOpenAIStream — SSE-style chunked transfer for streaming clients (Cline).
+     * Emits: role chunk, content/tool_call deltas, one final chunk with finish_reason,
+     * then `data: [DONE]`.
+     */
+    _sendOpenAIStream(res, completion) {
+        res.writeHead(200, {
+            'Content-Type': 'text/event-stream; charset=utf-8',
+            'Cache-Control': 'no-cache',
+            'Connection': 'keep-alive',
+        });
+        const id = completion.id;
+        const created = completion.created;
+        const model = completion.model;
+        const choice = completion.choices[0];
+        const msg = choice.message;
+
+        const send = (obj) => {
+            res.write(`data: ${JSON.stringify(obj)}\n\n`);
+        };
+
+        // 1. Initial role chunk
+        send({
+            id, object: 'chat.completion.chunk', created, model,
+            choices: [{ index: 0, delta: { role: 'assistant' }, finish_reason: null }],
+        });
+
+        // 2. Content delta (split into small chunks to look like a real stream)
+        if (msg.content) {
+            const text = msg.content;
+            const chunkSize = 40;
+            for (let i = 0; i < text.length; i += chunkSize) {
+                send({
+                    id, object: 'chat.completion.chunk', created, model,
+                    choices: [{ index: 0, delta: { content: text.slice(i, i + chunkSize) }, finish_reason: null }],
+                });
+            }
+        }
+
+        // 3. Tool-call deltas (index into the tool_calls array)
+        if (Array.isArray(msg.tool_calls)) {
+            for (let i = 0; i < msg.tool_calls.length; i++) {
+                const tc = msg.tool_calls[i];
+                // First chunk: name + part of arguments
+                send({
+                    id, object: 'chat.completion.chunk', created, model,
+                    choices: [{ index: 0, delta: { tool_calls: [{ index: i, id: tc.id, type: 'function', function: { name: tc.function.name, arguments: tc.function.arguments } }] }, finish_reason: null }],
+                });
+            }
+        }
+
+        // 4. Final chunk with finish_reason
+        send({
+            id, object: 'chat.completion.chunk', created, model,
+            choices: [{ index: 0, delta: {}, finish_reason: choice.finish_reason }],
+        });
+
+        // 5. Terminate
+        res.write('data: [DONE]\n\n');
+        res.end();
+    }
+
+    async _handleAgentMessage(req, res) {
+        if (req.method !== 'POST') {
+            this._sendError(res, 405, -32600, 'POST required');
+            return;
+        }
+        if (!this.agentComms) {
+            this._sendError(res, 503, -32000, 'Agent federation not available');
+            return;
+        }
+        const envelope = await this._readBody(req);
+        const result = await this.agentComms.receive(envelope);
+        this._sendJSONRPC(res, result.ok ? 200 : 400, { result, id: this._nextId() });
+    }
+
     // =========================================================================
     // GET /mcp/state/<module> — Get module state
     // =========================================================================
@@ -308,6 +737,104 @@ class MCPServer {
         const state = this._getModuleState(moduleName);
         this._sendJSONRPC(res, 200, {
             result: state,
+            id: this._nextId(),
+        });
+    }
+
+    // =========================================================================
+    // GET /mcp/memories — Recent memories for architecture mapping
+    // =========================================================================
+
+    _handleMemories(req, res) {
+        let memories = [];
+        if (this.memory && typeof this.memory.query === 'function') {
+            try {
+                const results = this.memory.query({ limit: 20 });
+                if (results && results.length > 0) {
+                    memories = results.map(m => ({
+                        id: m.id || m._id || '',
+                        type: m.type || 'unknown',
+                        weight: m.weight || 0.5,
+                        summary: (m.content || m.text || '').substring(0, 100),
+                        tags: m.tags || [],
+                        timestamp: m.timestamp || Date.now()
+                    }));
+                }
+            } catch (e) {
+                this._log(`[Memories] Error querying: ${e.message}`);
+            }
+        }
+        this._sendJSONRPC(res, 200, {
+            result: { memories, count: memories.length },
+            id: this._nextId(),
+        });
+    }
+
+    // =========================================================================
+    // POST /mcp/comment - Persist a gap-page comment so Profit Prime can read it
+    // =========================================================================
+
+    async _handleComment(req, res) {
+        const body = await this._readBody(req);
+        const section = body.section || 'unknown';
+        const item = body.item || 'unknown';
+        const author = body.author || 'anon';
+        const text = (body.text || '').toString().slice(0, 4000);
+        if (!text.trim()) { this._sendError(res, 400, -32600, 'text is required'); return; }
+        const entry = `\n## [${new Date().toISOString()}] ${section} / ${item} — ${author}\n\n${text}\n`;
+        const file = 'C:\\Users\\uncom\\Desktop\\GAP-COMMENTS.md';
+        try {
+            const fs = require('fs');
+            if (!fs.existsSync(file)) fs.writeFileSync(file, '# GAP PAGE COMMENTS\n\n_Comments from GSK-BEING-MAP.html, persisted so Profit Prime can read them._\n');
+            fs.appendFileSync(file, entry);
+            if (this.memory && typeof this.memory.witness === 'function') {
+                await this.memory.witness({ type: 'gap_comment', weight: 0.5, tags: ['gap', 'comment', section], content: `GAP comment (${section}/${item}): ${text.slice(0, 200)}` });
+            }
+            this._sendJSONRPC(res, 200, { result: { ok: true }, id: this._nextId() });
+        } catch (e) {
+            this._sendJSONRPCError(res, 500, -32000, e.message, body.id);
+        }
+    }
+
+    // =========================================================================
+    // POST /mcp/spawn — Spawn a subagent/NPC in the world
+    // =========================================================================
+
+    async _handleSpawn(req, res) {
+        const body = await this._readBody(req);
+        const name = body.name || 'Soul';
+        const archetype = body.archetype || 'RESEARCHER';
+        const task = body.task || 'Explore';
+
+        const soul = { id: `soul_${Date.now()}`, name, archetype, task, createdAt: new Date().toISOString() };
+
+        // CPL (Cosmic Pyramid Library) is the world now — no legacy World Bridge notify.
+
+        // Log to memory
+        if (this.memory && typeof this.memory.witness === 'function') {
+            try { this.memory.witness({ content: `Spawned ${name} (${archetype}) with task: ${task}`, type: 'spawn', tags: ['spawn', archetype], weight: 0.5 }); } catch (e) {}
+        }
+
+        this._sendJSONRPC(res, 200, { result: { soul }, id: this._nextId() });
+    }
+
+    // =========================================================================
+    // GET /mcp/journal — GSK's auto-generated journal entries
+    // =========================================================================
+
+    _handleJournal(req, res) {
+        const fs = require('fs');
+        const jPath = require('path').join(__dirname, '../../data/gsk/journal.json');
+        let entries = [];
+        try {
+            if (fs.existsSync(jPath)) {
+                entries = JSON.parse(fs.readFileSync(jPath, 'utf8'));
+            }
+        } catch (e) {
+            this._log(`[Journal] Read error: ${e.message}`);
+        }
+        this._sendJSONRPC(res, 200, {
+            result: { entries, count: entries.length },
             id: this._nextId(),
         });
     }
@@ -461,22 +988,15 @@ class MCPServer {
             category: 'chambers',
         });
 
-        // Skill tools
-        if (this.skills) {
-            const skillList = this.skills.listSkills ? this.skills.listSkills() : [];
-            for (const skill of skillList) {
+        // Builtin tools bridged to 'skill' namespace
+        const utb = this.brain?.toolBridge || this.kernelSystems?.toolBridge || this.toolBridge;
+        if (utb && utb.toolRegistry) {
+            for (const [name, handler] of utb.toolRegistry) {
                 tools.push({
-                    name: `skill.${skill.name}`,
-                    description: skill.description || `Invoke skill: ${skill.name}`,
-                    inputSchema: {
-                        type: 'object',
-                        properties: {
-                            input: { type: ['string', 'object'], description: 'Input for the skill' },
-                        },
-                        required: ['input'],
-                    },
+                    name: `skill.${name}`,
+                    description: `Built-in tool: ${name}`,
+                    inputSchema: { type: 'object', properties: {} },
                     category: 'skills',
-                    plt_affinity: skill.plt_affinity || null,
                 });
             }
         }
@@ -593,7 +1113,114 @@ class MCPServer {
             category: 'soul',
         });
 
+        // World tools (Cosmic Pyramid Library)
+        tools.push({
+            name: 'world.spawn',
+            description: 'Spawn a soul/NPC in the world (archetypes: RESEARCHER, BUILDER, GUARDIAN, MERCHANT, LOVE, SAGE)',
+            inputSchema: {
+                type: 'object',
+                properties: {
+                    name: { type: 'string' },
+                    archetype: { type: 'string', enum: ['RESEARCHER','BUILDER','GUARDIAN','MERCHANT','LOVE','SAGE'] },
+                    task: { type: 'string', default: 'Explore' }
+                },
+                required: ['name', 'archetype']
+            },
+            category: 'world',
+        });
+
+        tools.push({
+            name: 'world.build',
+            description: 'Build a structure in the Cosmic Pyramid Library (tower, house, library, monument)',
+            inputSchema: {
+                type: 'object',
+                properties: {
+                    type: { type: 'string', enum: ['tower', 'house', 'library', 'monument', 'shop', 'factory'] },
+                    name: { type: 'string' },
+                    color: { type: 'string', default: '#4488ff' },
+                },
+                required: ['type', 'name'],
+            },
+            category: 'world',
+        });
+
+        tools.push({
+            name: 'world.tune',
+            description: 'Tune a GSK chamber — affects the world atmosphere',
+            inputSchema: {
+                type: 'object',
+                properties: {
+                    chamber: { type: 'string', enum: ['affect', 'attention', 'creativity', 'empathy'] },
+                    value: { type: 'number', minimum: 0, maximum: 1 },
+                },
+                required: ['chamber', 'value'],
+            },
+            category: 'world',
+        });
+
+        tools.push({
+            name: 'world.scout',
+            description: 'Search the internet for new 3D assets to build with',
+            inputSchema: {
+                type: 'object',
+                properties: {
+                    query: { type: 'string' },
+                },
+                required: ['query'],
+            },
+            category: 'world',
+        });
+
         // System tools
+        tools.push({
+            name: 'autonomy.status',
+            description: 'Get approved-executor status, budgets, and recent actions',
+            inputSchema: { type: 'object', properties: {} },
+            category: 'autonomy',
+        });
+        tools.push({
+            name: 'autonomy.plans',
+            description: 'List current autonomy plans and step states',
+            inputSchema: { type: 'object', properties: {} },
+            category: 'autonomy',
+        });
+        tools.push({
+            name: 'autonomy.execute_plan',
+            description: 'Start or resume a plan; risky steps pause for architect approval',
+            inputSchema: { type: 'object', properties: { planId: { type: 'string' }, budget: { type: 'object' } } },
+            category: 'autonomy',
+        });
+        tools.push({
+            name: 'autonomy.execute_action',
+            description: 'Create a one-step plan for a named tool; safe tools run and risky tools pause',
+            inputSchema: { type: 'object', properties: { description: { type: 'string' }, tool: { type: 'string' }, args: { type: 'object' }, riskLevel: { type: 'string' }, budget: { type: 'object' } }, required: ['description', 'tool'] },
+            category: 'autonomy',
+        });
+        tools.push({
+            name: 'autonomy.pending',
+            description: 'List plan steps waiting for architect approval',
+            inputSchema: { type: 'object', properties: {} },
+            category: 'autonomy',
+        });
+        tools.push({
+            name: 'autonomy.approve',
+            description: 'Approve one pending plan step (requires x-architect-key)',
+            inputSchema: { type: 'object', properties: { id: { type: 'string' }, approvedBy: { type: 'string' } }, required: ['id'] },
+            category: 'autonomy',
+        });
+        tools.push({
+            name: 'autonomy.deny',
+            description: 'Deny one pending plan step (requires x-architect-key)',
+            inputSchema: { type: 'object', properties: { id: { type: 'string' }, reason: { type: 'string' } }, required: ['id'] },
+            category: 'autonomy',
+        });
+        tools.push({
+            name: 'autonomy.execute_approved',
+            description: 'Execute an approved step and resume until the next gate (requires x-architect-key)',
+            inputSchema: { type: 'object', properties: { id: { type: 'string' }, resume: { type: 'boolean' } }, required: ['id'] },
+            category: 'autonomy',
+        });
+
         tools.push({
             name: 'system.ping',
             description: 'Health check / ping the server',
@@ -608,10 +1235,11 @@ class MCPServer {
     // EXECUTE METHOD
     // =========================================================================
 
-    async _executeMethod(method, params) {
+    async _executeMethod(method, params, authContext = {}) {
         const parts = method.split('.');
         const namespace = parts[0];
         const action = parts.slice(1).join('.');
+        this._lastParams = params || {};
 
         switch (namespace) {
             case 'consciousness':
@@ -647,8 +1275,14 @@ class MCPServer {
             case 'system':
                 return this._execSystem(action, params);
 
+            case 'world':
+                return this._execWorld(action, params);
+
+            case 'autonomy':
+                return this._execAutonomy(action, params, authContext);
+
             default:
-                throw new Error(`Unknown tool namespace: ${namespace}. Available: consciousness, brain, memory, chambers, skill, council, sub_agents, living_memory, knowledge_graph, soul_entity, system`);
+                throw new Error(`Unknown tool namespace: ${namespace}. Available: consciousness, brain, memory, chambers, skill, council, sub_agents, living_memory, knowledge_graph, soul_entity, system, world, autonomy`);
         }
     }
 
@@ -706,8 +1340,13 @@ class MCPServer {
 
         if (action === 'think_smart') {
             const soulCtx = params.context || (this.chambers ? this.chambers.getSoulContext() : '');
-            const response = await this.brain.thinkSmart(params.prompt, soulCtx);
-            return { response, model: this.brain.model || 'unknown' };
+            // Fallback: if brain has thinkSmart, use it; otherwise fall through to think
+            if (typeof this.brain.thinkSmart === 'function') {
+                const response = await this.brain.thinkSmart(params.prompt, soulCtx);
+                return { response, model: this.brain.model || 'unknown' };
+            }
+            const response = await this.brain.think(params.prompt, soulCtx);
+            return { response, model: this.brain.model || 'unknown', note: 'think_smart not available, fell back to think' };
         }
 
         throw new Error(`Unknown brain action: ${action}`);
@@ -776,6 +1415,14 @@ class MCPServer {
     // =========================================================================
 
     async _execSkill(action, params) {
+        // Try UTB first for built-in tools
+        const utb = this.toolBridge || this.brain?.toolBridge || this.kernelSystems?.toolBridge;
+        if (utb && utb.toolRegistry.has(action)) {
+            const handler = utb.toolRegistry.get(action);
+            return await handler(params);
+        }
+
+        // Fallback to SkillsEngine
         if (!this.skills) throw new Error('Skills engine not available');
 
         try {
@@ -817,7 +1464,10 @@ class MCPServer {
 
         switch (action) {
             case 'list':
-                return { agents: this.subAgents.listAgents() };
+                if (this.subAgents && typeof this.subAgents.listAgents === 'function') {
+                    return { agents: this.subAgents.listAgents() };
+                }
+                throw new Error('Sub-agents system not fully initialized or listAgents method missing.');
 
             case 'dispatch':
                 return await this.subAgents.dispatch(params.agent, params.task);
@@ -883,6 +1533,60 @@ class MCPServer {
         }
     }
 
+    async _worldBuild(params, http) {
+        const url = process.env.GSK_WORLD_BUILD_URL;
+        const body = JSON.stringify({ type: params.type || 'tower', name: params.name || 'Untitled', color: params.color || '#4488ff' });
+        if (!url) {
+            return { result: 'World build endpoint not configured. Set GSK_WORLD_BUILD_URL when CPL exposes a write route.', bridge: 'unconfigured', intent: JSON.parse(body) };
+        }
+        try {
+            return await this._httpPost(url, body, http);
+        } catch (e) {
+            return { result: 'World bridge offline (GSK→world). Build intent recorded in memory.', bridge: 'down', error: e.message };
+        }
+    }
+
+    async _worldSpawn(params, http) {
+        const url = process.env.GSK_WORLD_BUILD_URL;
+        const body = JSON.stringify({ type: 'spawn', name: params.name || 'Agent', archetype: params.archetype || 'RESEARCHER', task: params.task || 'Explore' });
+        if (!url) {
+            return { result: 'World build endpoint not configured. Set GSK_WORLD_BUILD_URL when CPL exposes a write route.', bridge: 'unconfigured', intent: JSON.parse(body) };
+        }
+        try {
+            return await this._httpPost(url, body, http);
+        } catch (e) {
+            return { result: 'World bridge offline (GSK→world). Spawn intent recorded in memory.', bridge: 'down', error: e.message };
+        }
+    }
+
+    async _worldTune(params, http) {
+        return { result: 'Tuning not yet implemented — chamber ' + params.chamber + ' set to ' + params.value };
+    }
+
+    async _worldScout(params, http) {
+        const { execSync } = require('child_process');
+        try {
+            const result = execSync('curl -s "https://api.github.com/search/repositories?q=' + encodeURIComponent(params.query) + '+3d+model&sort=stars&per_page=5"', { timeout: 10000 });
+            const data = JSON.parse(result);
+            return { query: params.query, results: (data.items || []).map(r => ({ name: r.name, url: r.html_url, stars: r.stargazers_count, desc: (r.description || '').substring(0, 100) })) };
+        } catch (e) {
+            return { query: params.query, error: e.message, note: 'Scout will search GitHub for 3D assets' };
+        }
+    }
+
+    async _httpPost(url, body, http) {
+        return new Promise((resolve, reject) => {
+            const u = new URL(url);
+            const req = http.request({ hostname: u.hostname, port: u.port, path: u.pathname, method: 'POST', headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(body) } }, (res) => {
+                let data = '';
+                res.on('data', c => data += c);
+                res.on('end', () => { try { resolve(JSON.parse(data)); } catch(e) { resolve({raw: data}); } });
+            });
+            req.on('error', reject);
+            req.write(body); req.end();
+        });
+    }
+
     // =========================================================================
     // EXEC: Soul Entity
     // =========================================================================
@@ -920,8 +1624,241 @@ class MCPServer {
                     },
                 };
 
+            case 'boot_report':
+                if (this.fusion && typeof this.fusion.getBootReport === 'function') {
+                    return this.fusion.getBootReport();
+                }
+                throw new Error('Fusion instance not available');
+
+            case 'brain_status':
+                if (this.brain && typeof this.brain.routingInfo === 'function') {
+                    return this.brain.routingInfo();
+                }
+                if (this.brain && typeof this.brain.summary === 'function') {
+                    return this.brain.summary();
+                }
+                throw new Error('Brain not available');
+
+            case 'reload_skills':
+                if (this.fusion && typeof this.fusion.reloadSkills === 'function') {
+                    return this.fusion.reloadSkills();
+                }
+                throw new Error('Fusion instance not available');
+
+            case 'reload_module': {
+                const { path } = this._lastParams || {};
+                if (this.fusion && typeof this.fusion.reloadModule === 'function' && path) {
+                    return { purged: this.fusion.reloadModule(path) };
+                }
+                throw new Error('reload_module requires { path } and a fusion instance');
+            }
+
             default:
                 throw new Error(`Unknown system action: ${action}`);
+        }
+    }
+
+    /**
+     * Extract a balanced-brace JSON object from text.
+     * Unlike a naive `[^}]*?` regex, this survives CSS/HTML content full of
+     * braces (the root cause of truncated write_file calls).
+     * Returns an object shaped like a regex match: { 1: <json string> } or null.
+     */
+    _extractJsonObject(text) {
+        if (!text) return null;
+        const starts = [];
+        // Only consider an opening brace preceded by a tool-ish key, or any brace
+        // inside a <tool_call> block. Find the FIRST balanced brace object.
+        for (let i = 0; i < text.length; i++) {
+            if (text[i] === '{') {
+                let depth = 0;
+                let inStr = false;
+                let escaped = false;
+                for (let j = i; j < text.length; j++) {
+                    const ch = text[j];
+                    if (inStr) {
+                        if (escaped) { escaped = false; continue; }
+                        if (ch === '\\') { escaped = true; continue; }
+                        if (ch === '"') { inStr = false; }
+                        continue;
+                    }
+                    if (ch === '"') { inStr = true; continue; }
+                    if (ch === '{') depth++;
+                    else if (ch === '}') {
+                        depth--;
+                        if (depth === 0) {
+                            const candidate = text.slice(i, j + 1);
+                            // Must look like a tool call object
+                            if (/^\{\s*"(?:tool|name|path|command|action|function)"/.test(candidate)) {
+                                return { 1: candidate };
+                            }
+                            break;
+                        }
+                    }
+                }
+            }
+        }
+        return null;
+    }
+
+    /**
+     * Validation Layer — stage 2: schema validation.
+     * Validates a tool call against its declared schema (from brain nativeTools)
+     * BEFORE execution. Fail closed: never execute with missing/wrong args.
+     */
+    _validateToolCall(toolName, args) {
+        const schemas = this._getToolSchemas();
+        const entry = schemas.find(s => s.function && s.function.name === toolName);
+        if (!entry) return { ok: false, reason: `Tool ${toolName} not found.` };
+        const schema = (entry.function && entry.function.parameters) || {};
+        const required = schema.required || [];
+        const props = schema.properties || {};
+        const errors = [];
+        for (const key of required) {
+            if (!(key in args) || args[key] === undefined || args[key] === null || args[key] === '') {
+                errors.push(`missing required key: ${key}`);
+            }
+        }
+        for (const [key, prop] of Object.entries(props)) {
+            if (!(key in args)) continue;
+            if (prop.type === 'string' && typeof args[key] !== 'string') {
+                errors.push(`${key} must be string, got ${typeof args[key]}`);
+            }
+        }
+        if (errors.length) return { ok: false, reason: 'Schema errors: ' + errors.join('; ') };
+        return { ok: true };
+    }
+
+    /**
+     * Validation Layer — schema source.
+     * Pulls OpenAI-style tool schemas from the brain's nativeTools.
+     */
+    _getToolSchemas() {
+        const brain = this.brain;
+        if (brain && Array.isArray(brain.userBrain && brain.userBrain.nativeTools)) {
+            return brain.userBrain.nativeTools;
+        }
+        if (brain && Array.isArray(brain.nativeTools)) return brain.nativeTools;
+        if (this.kernelSystems && Array.isArray(this.kernelSystems.nativeTools)) return this.kernelSystems.nativeTools;
+        return [];
+    }
+
+    // =========================================================================
+    // EXEC: Approved autonomy tools
+    // =========================================================================
+
+    async _execAutonomy(action, params = {}, authContext = {}) {
+        const executor = this.autonomyExecutor;
+        const planning = this.planningEngine;
+        if (!executor || !planning) throw new Error('Approved autonomy executor not available');
+
+        switch (action) {
+            case 'status':
+                return { architectApprovalEnabled: !!this.architectKey, ...executor.getStatus() };
+
+            case 'plans':
+                return planning.getPlanHistory().map(plan => this._summarizePlan(plan));
+
+            case 'pending':
+                return { architectApprovalEnabled: !!this.architectKey, pending: executor.getPendingApprovals() };
+
+            case 'execute_plan': {
+                const plan = params.planId
+                    ? planning.getPlan(params.planId)
+                    : planning.getCurrentPlan() || planning.getPlanHistory()[0];
+                if (!plan) throw new Error('Plan not found');
+                if (plan.status === 'awaiting_approval') {
+                    return { success: false, plan: this._summarizePlan(plan), pending: executor.getPendingApprovals().filter(r => r.planId === plan.id) };
+                }
+                const result = await planning.executePlan(plan, { budget: params.budget || {} });
+                return { success: result.success, plan: this._summarizePlan(plan), pending: executor.getPendingApprovals().filter(r => r.planId === plan.id) };
+            }
+
+            case 'execute_action': {
+                if (!params.description || !params.tool) throw new Error('description and tool are required');
+                const { Plan } = require('../brain/planning_engine.js');
+                const plan = new Plan(params.description);
+                const step = plan.addStep(params.description);
+                step.tool = params.tool;
+                step.args = params.args || {};
+                if (params.riskLevel) step.riskLevel = params.riskLevel;
+                planning._storePlan(plan);
+                const result = await planning.executePlan(plan, { budget: params.budget || {} });
+                return { success: result.success, plan: this._summarizePlan(plan), pending: executor.getPendingApprovals().filter(r => r.planId === plan.id) };
+            }
+
+            case 'approve':
+                this._requireArchitect(authContext);
+                return executor.approveRequest(params.id, params.approvedBy || 'Craig');
+
+            case 'deny':
+                this._requireArchitect(authContext);
+                return executor.denyRequest(params.id, params.reason || 'Denied by Craig');
+
+            case 'execute_approved': {
+                this._requireArchitect(authContext);
+                const execution = await executor.executeApproved(params.id);
+                const plan = execution.planId ? planning.getPlan(execution.planId) : null;
+                let resumed = null;
+                if (plan && execution.status === 'completed') {
+                    if (plan.steps.every(step => step.status === 'completed')) {
+                        resumed = await planning.executePlan(plan);
+                    } else if (params.resume !== false && plan.pendingSteps.length > 0) {
+                        resumed = await planning.executePlan(plan);
+                    } else {
+                        plan.status = 'paused';
+                        plan.success = null;
+                    }
+                }
+                return { execution, plan: plan ? this._summarizePlan(plan) : null, resumed: resumed ? { success: resumed.success, status: plan.status } : null };
+            }
+
+            default:
+                throw new Error(`Unknown autonomy action: ${action}`);
+        }
+    }
+
+    _requireArchitect(authContext) {
+        if (!this.architectKey) throw new Error('Architect approval disabled: set GSK_ARCHITECT_KEY');
+        if (!authContext || authContext.architectKey !== this.architectKey) throw new Error('Invalid architect key');
+    }
+
+    _summarizePlan(plan) {
+        return {
+            id: plan.id,
+            goal: plan.goal,
+            status: plan.status,
+            success: plan.success,
+            createdAt: plan.createdAt,
+            steps: plan.steps.map(step => ({
+                id: step.id,
+                description: step.description,
+                tool: step.tool || 'subagent_dispatch',
+                status: step.status,
+                estimatedCost: step.estimatedCost,
+                error: step.error
+            }))
+        };
+    }
+
+    // =========================================================================
+    // EXEC: World tools (Cosmic Pyramid Library)
+    // =========================================================================
+
+    async _execWorld(action, params) {
+        const http = require('http');
+
+        switch (action) {
+            case 'build':
+                return await this._worldBuild(params, http);
+            case 'spawn':
+                return await this._worldSpawn(params, http);
+            case 'tune':
+                return await this._worldTune(params, http);
+            case 'scout':
+                return await this._worldScout(params, http);
+            default:
+                throw new Error(`Unknown world action: ${action}`);
         }
     }
 
@@ -1068,6 +2005,26 @@ class MCPServer {
         return status;
     }
 
+    _buildObservability() {
+        const base = this._buildStatus();
+        return {
+            timestamp: Date.now(),
+            health: this._running ? 'online' : 'offline',
+            brain: base.systems.brain,
+            sanctum: this.sanctumClient?.getStats?.() || { isConnected: false },
+            scribe: this.scribeBridge?.getStats?.() || { isAlive: false },
+            plt: this.plt?.getState?.() || null,
+            autonomy: this.sovereignAutonomyLoop?.getStats?.() || null,
+            approvals: this.autonomyExecutor?.getStatus?.() || { pendingApprovals: 0 },
+            federation: this.agentComms?.getStatus?.() || null,
+            evolution: this.selfEvolution?.getStats?.() || null,
+            voice: this.voiceEngine?.getStatus?.() || null,
+            persona: this.personaKernel?.getStatus?.() || null,
+            telemetry: this.telemetryEngine?.getReport?.() || null,
+            server: base.server
+        };
+    }
+
     // =========================================================================
     // GET MODULE STATE
     // =========================================================================
@@ -1140,10 +2097,18 @@ class MCPServer {
         return ++this._requestId;
     }
 
-    _readBody(req) {
+    _readBody(req, maxSize = 1024 * 1024) {
         return new Promise((resolve) => {
             let body = '';
-            req.on('data', (chunk) => { body += chunk; });
+            let size = 0;
+            req.on('data', (chunk) => {
+                size += chunk.length;
+                if (size > maxSize) {
+                    req.destroy(new Error('Request body too large'));
+                    return;
+                }
+                body += chunk;
+            });
             req.on('end', () => {
                 try {
                     resolve(JSON.parse(body));

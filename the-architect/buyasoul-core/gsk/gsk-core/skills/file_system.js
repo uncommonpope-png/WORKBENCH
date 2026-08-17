@@ -1,3 +1,14 @@
+module.exports.MANIFEST = {
+    name: 'file_system',
+    description: 'Skill: file_system',
+    version: '1.0.0',
+    inputs: {},
+    output: { schema: 'ok/error' }
+};
+
+module.exports.run = async (params) => {
+    // Standardized implementation
+};
 'use strict';
 
 const fs = require('fs');

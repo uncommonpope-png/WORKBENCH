@@ -202,12 +202,14 @@ class GodsCouncil {
         this.phase_log = [];
         this.phase_log.push(`[TRIGGER] Council convened on: "${topic}"`);
 
-        // Phase: Initial Positions (now async — each god uses brain.think)
+        // Phase: Initial Positions (now parallel — all gods deliberate simultaneously)
         this.phase = COUNCIL_PHASES.InitialPositions;
+        const positionPromises = this.gods.map(god => this._getGodPosition(god, topic));
+        const godPositions = await Promise.all(positionPromises);
         const positions = [];
-        for (const god of this.gods) {
-            const pos = await this._getGodPosition(god, topic);
-            this.phase_log.push(`[${god.name}] ${pos.position}`);
+        for (let i = 0; i < this.gods.length; i++) {
+            const pos = godPositions[i];
+            this.phase_log.push(`[${this.gods[i].name}] ${pos.position}`);
             positions.push(pos);
         }
 

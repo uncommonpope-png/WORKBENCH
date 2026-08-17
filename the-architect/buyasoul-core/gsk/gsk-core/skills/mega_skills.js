@@ -1,3 +1,14 @@
+module.exports.MANIFEST = {
+    name: 'mega_skills',
+    description: 'Skill: mega_skills',
+    version: '1.0.0',
+    inputs: {},
+    output: { schema: 'ok/error' }
+};
+
+module.exports.run = async (params) => {
+    // Standardized implementation
+};
 /**
  * ═══════════════════════════════════════════════════════════════════════════
  * MEGA_SKILLS.JS — UNIFIED SKILL ENGINE FOR THE GREATEST AGENT EVER
@@ -55,7 +66,7 @@ function loadSkillFiles() {
                 }
             }
         } catch (e) {
-            // Skip files that fail to load
+            console.warn(`[MEGA_SKILLS] Failed to load skill file: ${file} | Reason: ${e.message}`);
         }
     }
 

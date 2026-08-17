@@ -1,3 +1,14 @@
+module.exports.MANIFEST = {
+    name: 'reverse_proxy_configurator',
+    description: 'Skill: reverse_proxy_configurator',
+    version: '1.0.0',
+    inputs: {},
+    output: { schema: 'ok/error' }
+};
+
+module.exports.run = async (params) => {
+    // Standardized implementation
+};
 'use strict';
 
 const PLT_AFFINITY = { profit: 0.5, love: 0.3, tax: 0.2 };
@@ -19,3 +30,4 @@ async function skill_reverse_proxy_configurator(input, brain, memory) {
 }
 
 module.exports = { skill_reverse_proxy_configurator, PLT_AFFINITY };
+

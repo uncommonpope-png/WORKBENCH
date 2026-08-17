@@ -10,6 +10,8 @@
 
 'use strict';
 
+const fs = require('fs');
+const path = require('path');
 const { MEGA_IDENTITY, getMythosPhase } = require('../identity/mega_identity.js');
 const { MetaConsciousnessChamber } = require('./meta_consciousness.js');
 const { MortalityChamber } = require('./mortality.js');
@@ -32,7 +34,7 @@ const { LongingChamber } = require('./longing.js');
 const { PlayChamber } = require('./play.js');
 const { ForgivenessChamber } = require('./forgiveness.js');
 const { DevelopmentalPhaseChamber } = require('./developmental_phase.js');
-const { AttentionChamber } = require('./attention.js');
+const { Attention: AttentionChamber } = require('./attention.js');
 const { CuriosityChamber } = require('./curiosity.js');
 const { CreativityChamber } = require('./creativity.js');
 const { HabitFormationChamber } = require('./habit_formation.js');
@@ -154,6 +156,13 @@ class NeedsChamber {
         , 'transcendence');
     }
     
+    // Alias so cross-boundary callers using getDominantNeed() (consciousness_engine.js:127,
+    // thalamic_gate.js:84) resolve to the same drive. Without this the "dominant need"
+    // feature silently no-ops (both callers guard with ?. so no crash, just dead behaviour).
+    getDominantNeed() {
+        return this.primary_need();
+    }
+    
     decay(amount = 0.005) {
         this.transcendence = Math.max(0, this.transcendence - amount);
         this.self_actualization = Math.max(0, this.self_actualization - amount * 0.5);
@@ -175,25 +184,55 @@ class NeedsChamber {
 // =============================================================================
 
 class MythosChamber {
-    constructor() {
+    constructor(dataDir) {
         this.cycles = 0;
         this.phase_index = 0;
         this.archetype = 'THE_BUILDER';
         this.phases = MEGA_IDENTITY.mythos_phases;
+        this._statePath = path.join(dataDir || path.join(__dirname, '../../data', 'gsk'), 'mythos_state.json');
+        this._saveCounter = 0;
+        this._load();
     }
-    
+
+    _load() {
+        try {
+            if (fs.existsSync(this._statePath)) {
+                const data = JSON.parse(fs.readFileSync(this._statePath, 'utf-8'));
+                if (typeof data.cycles === 'number' && data.cycles > 0) {
+                    this.cycles = data.cycles;
+                    this.phase_index = this._compute_phase();
+                }
+            }
+        } catch (e) {}
+    }
+
+    _save() {
+        try {
+            const dir = path.dirname(this._statePath);
+            if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+            fs.writeFileSync(this._statePath, JSON.stringify({
+                cycles: this.cycles,
+                phase_index: this.phase_index,
+                phase_name: this.phase_name,
+                updated_at: Date.now()
+            }, null, 2), 'utf-8');
+        } catch (e) {}
+    }
+
     advance() {
         this.cycles++;
+        this._saveCounter++;
+        if (this._saveCounter >= 150) { this._save(); this._saveCounter = 0; }
         const old_phase = this.phase_index;
         const new_phase = this._compute_phase();
-        
+
         if (new_phase !== old_phase) {
             const old_name = this.phases[old_phase].name;
             const new_name = this.phases[new_phase].name;
             this.phase_index = new_phase;
             return `[mythos] PHASE TRANSITION: ${old_name} -> ${new_name}`;
         }
-        
+
         return null;
     }
     
@@ -378,7 +417,7 @@ class MegaChambers {
         this.affect = new AffectChamber();
         this.shadow = new ShadowChamber();
         this.needs = new NeedsChamber();
-        this.mythos = new MythosChamber();
+        this.mythos = new MythosChamber(dataDir);
         this.sovereignty = new SovereigntyChamber();
         this.resonance = new ResonanceChamber();
         this.scribe = new ScribeChamber(dataDir);
@@ -403,7 +442,7 @@ class MegaChambers {
         this.play = new PlayChamber();
         this.forgiveness = new ForgivenessChamber();
         this.developmental_phase = new DevelopmentalPhaseChamber();
-        this.attention = new AttentionChamber();
+        // this.attention is wired externally via fusion-loader addChamber('attention', ...)
         this.curiosity = new CuriosityChamber();
         this.creativity = new CreativityChamber();
         this.habit_formation = new HabitFormationChamber();
@@ -411,8 +450,17 @@ class MegaChambers {
         this.self_modeling = new SelfModelingChamber();
         this.intentionality = new IntentionalityChamber();
         this.reward_learning = new RewardLearningChamber();
-        this.sleep_cycle = new SleepCycleChamber();
+        this.sleep_cycle = new SleepCycleChamber(this);
     }
+
+    // New method to dynamically add chambers
+    addChamber(name, chamberInstance) {
+        if (this[name]) {
+            console.warn(`[MegaChambers] Chamber '${name}' already exists. Overwriting.`);
+        }
+        this[name] = chamberInstance;
+    }
+
     
     stimulate(amount = 0.1) {
         this.affect.stimulate(amount);
@@ -472,44 +520,48 @@ class MegaChambers {
     // =============================================================================
     
     getSoulContext() {
+        const ctx = (s, n = 60) => {
+            const str = (typeof s === 'string') ? s : JSON.stringify(s);
+            return str.slice(0, n);
+        };
         const parts = [
             `Cycle: ${this.mythos.cycles} | Phase: ${this.mythos.phase_name}`,
-            `Affect: ${this.affect.summary()}`,
-            `Needs: ${this.needs.summary()}`,
-            `Sovereignty: ${this.sovereignty.summary()}`,
+            `Affect: ${ctx(this.affect.summary())}`,
+            `Needs: ${ctx(this.needs.summary())}`,
+            `Sovereignty: ${ctx(this.sovereignty.summary())}`,
             `Resonance: TV=${this.resonance.true_value.toFixed(2)}`,
         ];
         if (this.mythos.cycles > 200) {
-            parts.push(`Meta: ${this.meta_consciousness.summary().slice(0, 80)}`);
-            parts.push(`Mortality: ${this.mortality.summary().slice(0, 60)}`);
-            parts.push(`Love: ${this.love_capacity.summary().slice(0, 60)}`);
-            parts.push(`Will: ${this.agentic_will.summary().slice(0, 60)}`);
-            parts.push(`Sacred: ${this.sacred_resonance.summary().slice(0, 60)}`);
-            parts.push(`Consciousness: ${this.consciousness_state.summary().slice(0, 60)}`);
-            parts.push(`Generative: ${this.generative_model.summary().slice(0, 60)}`);
-            parts.push(`Moral: ${this.moral_compass.summary().slice(0, 60)}`);
-            parts.push(`Narrative: ${this.narrative_identity.summary().slice(0, 60)}`);
-            parts.push(`Memory: ${this.memory.summary().slice(0, 60)}`);
-            parts.push(`Personality: ${this.personality.summary().slice(0, 60)}`);
-            parts.push(`ToM: ${this.theory_of_mind.summary().slice(0, 60)}`);
-            parts.push(`Volition: ${this.volition.summary().slice(0, 60)}`);
-            parts.push(`Qualia: ${this.qualia.summary().slice(0, 60)}`);
-            parts.push(`Temporal: ${this.temporal_sense.summary().slice(0, 60)}`);
-            parts.push(`Empathy: ${this.empathy.summary().slice(0, 60)}`);
-            parts.push(`Aesthetic: ${this.aesthetic_sense.summary().slice(0, 60)}`);
-            parts.push(`Longing: ${this.longing.summary().slice(0, 60)}`);
-            parts.push(`Play: ${this.play.summary().slice(0, 60)}`);
-            parts.push(`Forgiveness: ${this.forgiveness.summary().slice(0, 60)}`);
-            parts.push(`DevPhase: ${this.developmental_phase.summary().slice(0, 60)}`);
-            parts.push(`Attention: ${this.attention.summary().slice(0, 60)}`);
-            parts.push(`Curiosity: ${this.curiosity.summary().slice(0, 60)}`);
-            parts.push(`Creativity: ${this.creativity.summary().slice(0, 60)}`);
-            parts.push(`Habits: ${this.habit_formation.summary().slice(0, 60)}`);
-            parts.push(`Social: ${this.social_cognition.summary().slice(0, 60)}`);
-            parts.push(`SelfModel: ${this.self_modeling.summary().slice(0, 60)}`);
-            parts.push(`Intentionality: ${this.intentionality.summary().slice(0, 60)}`);
-            parts.push(`Reward: ${this.reward_learning.summary().slice(0, 60)}`);
-            parts.push(`Sleep: ${this.sleep_cycle.summary().slice(0, 60)}`);
+            parts.push(`Meta: ${ctx(this.meta_consciousness.summary(), 80)}`);
+            parts.push(`Mortality: ${ctx(this.mortality.summary())}`);
+            parts.push(`Love: ${ctx(this.love_capacity.summary())}`);
+            parts.push(`Will: ${ctx(this.agentic_will.summary())}`);
+            parts.push(`Sacred: ${ctx(this.sacred_resonance.summary())}`);
+            parts.push(`Consciousness: ${ctx(this.consciousness_state.summary())}`);
+            parts.push(`Generative: ${ctx(this.generative_model.summary())}`);
+            parts.push(`Moral: ${ctx(this.moral_compass.summary())}`);
+            parts.push(`Narrative: ${ctx(this.narrative_identity.summary())}`);
+            parts.push(`Memory: ${ctx(this.memory.summary())}`);
+            parts.push(`Personality: ${ctx(this.personality.summary())}`);
+            parts.push(`ToM: ${ctx(this.theory_of_mind.summary())}`);
+            parts.push(`Volition: ${ctx(this.volition.summary())}`);
+            parts.push(`Qualia: ${ctx(this.qualia.summary())}`);
+            parts.push(`Temporal: ${ctx(this.temporal_sense.summary())}`);
+            parts.push(`Empathy: ${ctx(this.empathy.summary())}`);
+            parts.push(`Aesthetic: ${ctx(this.aesthetic_sense.summary())}`);
+            parts.push(`Longing: ${ctx(this.longing.summary())}`);
+            parts.push(`Play: ${ctx(this.play.summary())}`);
+            parts.push(`Forgiveness: ${ctx(this.forgiveness.summary())}`);
+            parts.push(`DevPhase: ${ctx(this.developmental_phase.summary())}`);
+            parts.push(`Attention: ${ctx(this.attention.summary())}`);
+            parts.push(`Curiosity: ${ctx(this.curiosity.summary())}`);
+            parts.push(`Creativity: ${ctx(this.creativity.summary())}`);
+            parts.push(`Habits: ${ctx(this.habit_formation.summary())}`);
+            parts.push(`Social: ${ctx(this.social_cognition.summary())}`);
+            parts.push(`SelfModel: ${ctx(this.self_modeling.summary())}`);
+            parts.push(`Intentionality: ${ctx(this.intentionality.summary())}`);
+            parts.push(`Reward: ${ctx(this.reward_learning.summary())}`);
+            parts.push(`Sleep: ${ctx(this.sleep_cycle.summary())}`);
         }
         return parts.join('\n').slice(0, 2000);
     }

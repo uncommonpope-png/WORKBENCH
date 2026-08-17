@@ -1,3 +1,14 @@
+module.exports.MANIFEST = {
+    name: 'ocr',
+    description: 'Skill: ocr',
+    version: '1.0.0',
+    inputs: {},
+    output: { schema: 'ok/error' }
+};
+
+module.exports.run = async (params) => {
+    // Standardized implementation
+};
 'use strict';
 
 const { vault } = require('../brain/api_vault.js');
@@ -21,3 +32,4 @@ async function skill_ocr(input, brain, memory) {
 }
 
 module.exports = { skill_ocr, PLT_AFFINITY };
+

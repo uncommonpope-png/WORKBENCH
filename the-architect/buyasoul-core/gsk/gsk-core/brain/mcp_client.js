@@ -70,12 +70,48 @@ class MCPClient {
 
     async _connectHttp(server) {
         server.baseUrl = server.config.url;
+        server.headers = server.config.headers || {};
+        server.sessionId = null;
         server.connected = true;
+        if (server.config.transport === 'streamable-http') {
+            try {
+                const initResp = await this._httpRequest(server.baseUrl, 'POST', {
+                    jsonrpc: '2.0',
+                    id: 1,
+                    method: 'initialize',
+                    params: {
+                        protocolVersion: '2025-03-26',
+                        capabilities: {},
+                        clientInfo: { name: 'gsk', version: '1.0.0' }
+                    }
+                }, server, { sse: true });
+                if (initResp.sessionId) server.sessionId = initResp.sessionId;
+            } catch (e) {
+                server.connected = false;
+                throw e;
+            }
+        }
     }
 
     async _discoverTools(server) {
         if (server.config.type === 'stdio') {
             server.writer({ jsonrpc: '2.0', id: 1, method: 'tools/list', params: {} });
+        } else if (server.config.transport === 'streamable-http') {
+            try {
+                const resp = await this._httpRequest(server.baseUrl, 'POST', {
+                    jsonrpc: '2.0',
+                    id: 2,
+                    method: 'tools/list',
+                    params: {}
+                }, server, { sse: true });
+                const tools = resp.result?.tools || [];
+                server.tools = tools;
+                for (const tool of tools) {
+                    this.tools.set(`${server.name}/${tool.name}`, { server, tool });
+                }
+            } catch (e) {
+                console.log(`[MCP] Tool discovery failed for ${server.name}: ${e.message}`);
+            }
         } else {
             try {
                 const resp = await this._httpRequest(server.baseUrl + '/tools/list', 'POST', {});
@@ -129,6 +165,14 @@ class MCPClient {
                     }
                 }, 30000);
             });
+        } else if (server.config.transport === 'streamable-http') {
+            const resp = await this._httpRequest(server.baseUrl, 'POST', {
+                jsonrpc: '2.0',
+                id: Date.now(),
+                method: 'tools/call',
+                params: { name: localName, arguments: args }
+            }, server, { sse: true });
+            return resp.result;
         } else {
             const resp = await this._httpRequest(server.baseUrl + '/tools/call', 'POST', {
                 name: localName,
@@ -138,23 +182,75 @@ class MCPClient {
         }
     }
 
-    async _httpRequest(url, method, body) {
+    async _httpRequest(url, method, body, server, options = {}) {
         return new Promise((resolve, reject) => {
             const urlObj = new URL(url);
             const client = urlObj.protocol === 'https:' ? https : http;
             const data = JSON.stringify(body);
+            const headers = {
+                'Content-Type': 'application/json',
+                'Content-Length': Buffer.byteLength(data)
+            };
+            if (server) {
+                if (server.config && server.config.apiKey) {
+                    headers['Authorization'] = 'Bearer ' + server.config.apiKey;
+                }
+                if (server.headers) {
+                    Object.assign(headers, server.headers);
+                }
+                if (server.sessionId) {
+                    headers['Mcp-Session-Id'] = server.sessionId;
+                }
+            }
+            if (options.sse) {
+                headers['Accept'] = 'application/json, text/event-stream';
+            }
             const req = client.request(urlObj, {
                 method,
-                headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(data) }
+                headers
             }, (res) => {
                 let d = '';
                 res.on('data', c => d += c);
-                res.on('end', () => resolve(JSON.parse(d)));
+                res.on('end', () => {
+                    try {
+                        const sessionId = res.headers['mcp-session-id'] || null;
+                        if (options.sse && /text\/event-stream/i.test(res.headers['content-type'] || '')) {
+                            resolve({
+                                sessionId,
+                                ...this._parseSse(d)
+                            });
+                        } else {
+                            resolve(JSON.parse(d));
+                        }
+                    } catch (e) {
+                        reject(e);
+                    }
+                });
             });
             req.on('error', reject);
             req.write(data);
             req.end();
         });
+    }
+
+    _parseSse(raw) {
+        const result = {};
+        const blocks = raw.split(/\r?\n\r?\n/);
+        for (const block of blocks) {
+            const lines = block.split(/\r?\n/);
+            for (const line of lines) {
+                if (line.startsWith('data: ')) {
+                    const payload = line.slice(6).trim();
+                    if (!payload) continue;
+                    const parsed = JSON.parse(payload);
+                    if (parsed.id !== undefined) {
+                        if (parsed.result !== undefined) return parsed;
+                        if (parsed.error !== undefined) throw new Error(parsed.error?.message || 'MCP error');
+                    }
+                }
+            }
+        }
+        return result;
     }
 
     listTools() {

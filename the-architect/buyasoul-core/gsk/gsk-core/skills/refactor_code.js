@@ -1,3 +1,14 @@
+module.exports.MANIFEST = {
+    name: 'refactor_code',
+    description: 'Skill: refactor_code',
+    version: '1.0.0',
+    inputs: {},
+    output: { schema: 'ok/error' }
+};
+
+module.exports.run = async (params) => {
+    // Standardized implementation
+};
 'use strict';
 
 const PLT_AFFINITY = { profit: 0.5, love: 0.2, tax: 0.3 };

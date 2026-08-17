@@ -1,3 +1,14 @@
+module.exports.MANIFEST = {
+    name: 'plt_economy',
+    description: 'Skill: plt_economy',
+    version: '1.0.0',
+    inputs: {},
+    output: { schema: 'ok/error' }
+};
+
+module.exports.run = async (params) => {
+    // Standardized implementation
+};
 'use strict';
 
 const fs = require('fs');

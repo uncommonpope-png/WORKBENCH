@@ -21,8 +21,10 @@ const fs = require('fs');
 const path = require('path');
 
 class LivingMemory {
-    constructor(soulId) {
+    constructor(soulId, options = {}) {
         this.soulId = soulId || 'default';
+        this.vectorMemory = options.vectorMemory || null;
+        this.eventBus = options.eventBus || null;
         this.dataDir = path.join(__dirname, '../../data/living_memory', this.soulId);
         this.memoryPath = path.join(this.dataDir, 'memory.json');
         this.connectionsPath = path.join(this.dataDir, 'connections.json');
@@ -139,6 +141,22 @@ class LivingMemory {
         this._updateStats();
         this._save();
         
+        // Sync to vector memory for RAG retrieval (Godforge Build 1)
+        if (this.vectorMemory && typeof this.vectorMemory.addMemory === 'function') {
+            const text = typeof event === 'string' ? event : JSON.stringify(event);
+            this.vectorMemory.addMemory(text, {
+                type: type,
+                tags: tags,
+                weight: weight,
+                source: 'living_memory',
+                originalId: id
+            }).catch(() => {});
+        }
+        
+        try {
+            this.eventBus?.publish('memory.stored', { type, size: typeof event === 'string' ? event.length : JSON.stringify(event).length, id, timestamp: Date.now() });
+        } catch (_) {}
+        
         return id;
     }
     
@@ -233,6 +251,10 @@ class LivingMemory {
             this.memories.set(memory.id, memory);
             this._save();
         }
+        
+        try {
+            this.eventBus?.publish('memory.recalled', { query, resultsCount: results.length, timestamp: Date.now() });
+        } catch (_) {}
         
         return results;
     }

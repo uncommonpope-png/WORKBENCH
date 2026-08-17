@@ -1,3 +1,14 @@
+module.exports.MANIFEST = {
+    name: 'achievements',
+    description: 'Skill: achievements',
+    version: '1.0.0',
+    inputs: {},
+    output: { schema: 'ok/error' }
+};
+
+module.exports.run = async (params) => {
+    // Standardized implementation
+};
 'use strict';
 
 const fs = require('fs');
@@ -174,3 +185,4 @@ async function skill_achievements(input) {
 }
 
 module.exports = { skill_achievements };
+

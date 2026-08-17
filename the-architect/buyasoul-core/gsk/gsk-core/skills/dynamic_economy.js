@@ -1,3 +1,14 @@
+module.exports.MANIFEST = {
+    name: 'dynamic_economy',
+    description: 'Skill: dynamic_economy',
+    version: '1.0.0',
+    inputs: {},
+    output: { schema: 'ok/error' }
+};
+
+module.exports.run = async (params) => {
+    // Standardized implementation
+};
 'use strict';
 
 const fs = require('fs');
@@ -169,3 +180,4 @@ async function skill_dynamic_economy(input) {
 }
 
 module.exports = { skill_dynamic_economy };
+

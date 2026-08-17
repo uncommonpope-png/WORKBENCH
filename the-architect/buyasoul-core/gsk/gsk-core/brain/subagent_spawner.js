@@ -225,8 +225,27 @@ class SubagentSpawner extends EventEmitter {
         
         // Try to start immediately if we have capacity
         this._processSpawnQueue();
+
+        // Dark City: manifest spawned agent as a factory in the Agent district
+        this._manifestAgentInCity(type, agentId);
+        
+        try {
+            this.kernel?.systems?.eventBus?.publish('agent.spawned', { agentType: type, agentId, taskId: agentId, timestamp: Date.now() });
+        } catch (_) {}
         
         return agentId;
+    }
+
+    /**
+     * Dark City: manifest an agent spawn as a factory building in Sanctum.
+     */
+    _manifestAgentInCity(type, agentId) {
+        const sanctum = this.kernel?.sanctumClient;
+        if (!sanctum || !sanctum.isConnected) return;
+        try {
+            const name = `${type}_${agentId.slice(-6)}`;
+            sanctum.placeBuilding(name, 'factory', null, null, ['resource_collector']);
+        } catch (_) {}
     }
 
     /**
@@ -267,6 +286,9 @@ class SubagentSpawner extends EventEmitter {
             
             this._log(agent.id, `Completed ${agent.type} agent`);
             this.emit('agentCompleted', agent);
+            try {
+                this.kernel?.systems?.eventBus?.publish('agent.completed', { agentType: agent.type, agentId: agent.id, resultSummary: typeof result === 'string' ? result.substring(0, 120) : JSON.stringify(result).substring(0, 120) });
+            } catch (_) {}
             
             // Process next in queue
             this._processSpawnQueue();
@@ -281,6 +303,9 @@ class SubagentSpawner extends EventEmitter {
             
             this._log(agent.id, `Failed ${agent.type} agent: ${error.message}`);
             this.emit('agentFailed', agent);
+            try {
+                this.kernel?.systems?.eventBus?.publish('agent.failed', { agentType: agent.type, agentId: agent.id, error: agent.error });
+            } catch (_) {}
             
             // Retry logic
             if (agent.retryCount < agent.maxRetries) {
@@ -318,13 +343,25 @@ class SubagentSpawner extends EventEmitter {
         
         let output;
         try {
-            if (this.kernel && this.kernel.brain) {
-                const prompt = `You are a ${agent.type} with purpose: ${agent.template.purpose}.
-Task: ${taskDesc}
+            // DEEPAGENTS PATTERN: isolated context window per sub-agent.
+            // Instead of brain.think() (shared context), build an isolated prompt
+            // that includes only: the agent's persona, the task, and a relevant
+            // slice of memory from the memory store — NOT the full conversation context.
+            const isolatedMemory = await this._fetchIsolatedContext(agent);
+            const prompt = `You are a ${agent.type} with purpose: ${agent.template.purpose}.
+Autonomy level: ${agent.template.autonomy}
 Capabilities: ${agent.template.capabilities.join(', ')}
 
-Provide a detailed analysis, plan, or implementation for this task. Be specific and actionable.`;
-                const result = await this.kernel.brain.think(prompt);
+Isolated context (your ONLY memory):
+${isolatedMemory}
+
+Task: ${taskDesc}
+
+Provide a detailed analysis, plan, or implementation for this task. Be specific and actionable.
+Do NOT reference the broader kernel context — work only from your isolated context above.`;
+
+            if (this.kernel && this.kernel.brain && typeof this.kernel.brain.think === 'function') {
+                const result = await this.kernel.brain.think(prompt, '', 0.7, { isolated: true, agentId: agent.id });
                 output = result || this._generateAgentOutput(agent);
             } else {
                 output = this._generateAgentOutput(agent);
@@ -332,11 +369,19 @@ Provide a detailed analysis, plan, or implementation for this task. Be specific 
         } catch (e) {
             output = this._generateAgentOutput(agent);
         }
-        
+
         clearInterval(progressInterval);
-        
+
+        // Store this agent's result in isolated memory for future reference
+        if (this.kernel?.memory?.addMemory) {
+            await this.kernel.memory.addMemory(
+                `[Agent ${agent.id}] ${taskDesc}: ${String(output).substring(0, 500)}`,
+                { type: 'agent_result', agentType: agent.type, agentId: agent.id, taskId: agent.id }
+            ).catch(() => {});
+        }
+
         const workTime = Date.now() - agent.startedAt;
-        
+
         const result = {
             agentId: agent.id,
             type: agent.type,
@@ -348,11 +393,33 @@ Provide a detailed analysis, plan, or implementation for this task. Be specific 
                 efficiency: output.length > 50 ? 0.9 : 0.5
             }
         };
-        
+
         agent.progress = 100;
-        
+
         this._log(agent.id, `${agent.type} completed in ${workTime}ms`);
         return result;
+    }
+
+    /**
+     * DEEPAGENTS PATTERN: Fetch only the memory slice relevant to this agent.
+     * Uses vector memory similarity to avoid context bloat.
+     */
+    async _fetchIsolatedContext(agent) {
+        const memory = this.kernel?.memory;
+        if (!memory || typeof memory.search !== 'function') return 'No isolated context available.';
+
+        const taskDesc = agent.task.description || '';
+        const results = await memory.search(
+            taskDesc,
+            { type: 'agent_result', limit: 5, threshold: 0.3 },
+            { type: 'plan', limit: 3, threshold: 0.3 }
+        );
+
+        if (!results || results.length === 0) {
+            return `Agent persona: ${agent.template.purpose}. No prior context.`;
+        }
+
+        return results.map(r => `• ${r.content || r.text || String(r)}`).join('\n');
     }
 
     /**
@@ -464,6 +531,33 @@ Provide a detailed analysis, plan, or implementation for this task. Be specific 
      */
     getAgent(agentId) {
         return this.agents.get(agentId) || null;
+    }
+
+    /**
+     * SESHAT BRIDGE: MCP-compatible dispatch (maps to spawnAgent).
+     * @param {string} type - Agent template type
+     * @param {string|Object} task - Task description
+     * @returns {Promise<Object>} { agentId, status }
+     */
+    async dispatch(type, task) {
+        const agentId = await this.spawnAgent(type, task);
+        const agent = this.agents.get(agentId) || null;
+        return { agentId, status: agent?.status || 'queued', task: typeof task === 'string' ? task : task?.description };
+    }
+
+    /**
+     * SESHAT BRIDGE: MCP-compatible agent listing.
+     * @returns {Array} Array of agent summaries
+     */
+    listAgents() {
+        return Array.from(this.agents.values()).map(a => ({
+            id: a.id,
+            type: a.type,
+            status: a.status,
+            task: typeof a.task === 'object' && a.task ? a.task.description || JSON.stringify(a.task).slice(0, 120) : (a.task || ''),
+            spawnedAt: a.spawnedAt,
+            resultSummary: a.result
+        }));
     }
 
     /**

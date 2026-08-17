@@ -1,3 +1,14 @@
+module.exports.MANIFEST = {
+    name: 'pptx',
+    description: 'Skill: pptx',
+    version: '1.0.0',
+    inputs: {},
+    output: { schema: 'ok/error' }
+};
+
+module.exports.run = async (params) => {
+    // Standardized implementation
+};
 'use strict';
 
 const { vault } = require('../brain/api_vault.js');
@@ -21,3 +32,4 @@ async function skill_pptx(input, brain, memory) {
 }
 
 module.exports = { skill_pptx, PLT_AFFINITY };
+
