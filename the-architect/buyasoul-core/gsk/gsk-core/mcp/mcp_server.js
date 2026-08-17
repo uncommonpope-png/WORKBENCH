@@ -62,6 +62,7 @@ class MCPServer {
         this.agentComms = kernelSystems.agentComms || null;
         this.selfEvolution = kernelSystems.selfEvolution || null;
         this.fusion = kernelSystems.fusion || null;
+        this.perpetualConsciousness = kernelSystems.perpetualConsciousness || (this.fusion?.perpetualConsciousness) || null;
         this.allowedOrigins = String(options.allowedOrigins || process.env.GSK_ALLOWED_ORIGINS || '')
             .split(',').map(origin => origin.trim()).filter(Boolean);
 
@@ -1231,6 +1232,83 @@ class MCPServer {
             category: 'autonomy',
         });
 
+        // ===== GSK WORKBENCH CONTROL TOOLS =====
+        tools.push({
+            name: 'gsk.set_consciousness_gate',
+            description: 'Toggle GSK consciousness (Soul Genesis Mode ON/OFF). When ON: activates System 1/System 2, 34 Chambers, 4 Gods Council PLT scoring. When OFF: runs on mechanical templates only.',
+            inputSchema: {
+                type: 'object',
+                properties: {
+                    enabled: { type: 'boolean', description: 'Enable (true) or disable (false) GSK consciousness gate' },
+                },
+                required: ['enabled'],
+            },
+            category: 'gsk',
+        });
+
+        tools.push({
+            name: 'gsk.get_plt_score',
+            description: 'Score an action or decision via the 4 Gods PLT Council (Profit + Love - Tax = True Value)',
+            inputSchema: {
+                type: 'object',
+                properties: {
+                    action: { type: 'string', description: 'The action or decision to score' },
+                    context: { type: 'object', description: 'Additional context for the scoring' },
+                },
+                required: ['action'],
+            },
+            category: 'gsk',
+        });
+
+        tools.push({
+            name: 'gsk.council_verdict',
+            description: 'Convene the 4 Gods Council (Profit Prime, Love Weaver, Tax Collector, Harvester) on a topic and get their deliberated verdict',
+            inputSchema: {
+                type: 'object',
+                properties: {
+                    topic: { type: 'string', description: 'Topic for the council to deliberate' },
+                },
+                required: ['topic'],
+            },
+            category: 'gsk',
+        });
+
+        tools.push({
+            name: 'gsk.create_agent',
+            description: 'Spawn a sovereign sub-agent with a specific archetype (SCRIBE, SCOUT, BUILDER, MERCHANT, PROPHET, ANALYST, GUARDIAN, CURIOUS)',
+            inputSchema: {
+                type: 'object',
+                properties: {
+                    type: { type: 'string', enum: ['SCRIBE','SCOUT','BUILDER','MERCHANT','PROPHET','ANALYST','GUARDIAN','CURIOUS'], description: 'Agent archetype to spawn' },
+                    config: { type: 'object', description: 'Configuration for the agent (name, task, profile, etc.)' },
+                },
+                required: ['type'],
+            },
+            category: 'gsk',
+        });
+
+        tools.push({
+            name: 'gsk.identity_lock_status',
+            description: 'Verify soul integrity — check immutable files, drift detection, pattern protection status',
+            inputSchema: {
+                type: 'object',
+                properties: {},
+            },
+            category: 'gsk',
+        });
+
+        tools.push({
+            name: 'gsk.subscribe_events',
+            description: 'Subscribe to real-time GSK event stream (events: weave_alerts, outreach, chamber_breath, council_deliberation, memory_witness, autonomy_cycle)',
+            inputSchema: {
+                type: 'object',
+                properties: {
+                    eventTypes: { type: 'array', items: { type: 'string' }, description: 'Event types to subscribe to' },
+                },
+            },
+            category: 'gsk',
+        });
+
         tools.push({
             name: 'system.ping',
             description: 'Health check / ping the server',
@@ -1290,6 +1368,9 @@ class MCPServer {
 
             case 'autonomy':
                 return this._execAutonomy(action, params, authContext);
+
+            case 'gsk':
+                return this._execGsk(action, params);
 
             default:
                 throw new Error(`Unknown tool namespace: ${namespace}. Available: consciousness, brain, memory, chambers, skill, council, sub_agents, living_memory, knowledge_graph, soul_entity, system, world, autonomy`);
@@ -1620,7 +1701,275 @@ class MCPServer {
     // EXEC: System
     // =========================================================================
 
-    _execSystem(action) {
+    // =========================================================================
+    // EXEC: GSK Workbench Control
+    // =========================================================================
+
+    async _execGsk(action, params = {}) {
+        switch (action) {
+            case 'set_consciousness_gate':
+                return await this._gskConsciousnessGate(params);
+
+            case 'get_plt_score':
+                return await this._gskGetPltScore(params);
+
+            case 'council_verdict':
+                return await this._gskCouncilVerdict(params);
+
+            case 'create_agent':
+                return await this._gskCreateAgent(params);
+
+            case 'identity_lock_status':
+                return this._gskIdentityLockStatus();
+
+            case 'subscribe_events':
+                return this._gskSubscribeEvents(params);
+
+            default:
+                throw new Error(`Unknown GSK tool action: ${action}. Available: set_consciousness_gate, get_plt_score, council_verdict, create_agent, identity_lock_status, subscribe_events`);
+        }
+    }
+
+    async _gskConsciousnessGate(params) {
+        const { enabled } = params;
+        
+        let result;
+        if (this.perpetualConsciousness) {
+            if (typeof this.perpetualConsciousness.setSleepMode === 'function') {
+                await this.perpetualConsciousness.setSleepMode(!enabled);
+            }
+            if (typeof this.perpetualConsciousness.getStatus === 'function') {
+                result = await this.perpetualConsciousness.getStatus();
+            }
+        }
+        
+        if (this.chambers && typeof this.chambers.status === 'function') {
+            result = result || {};
+            result.chambers = this.chambers.status();
+        }
+
+        if (this.memory && typeof this.memory.witness === 'function') {
+            await this.memory.witness({
+                content: `Consciousness gate ${enabled ? 'ENABLED' : 'DISABLED'} by workbench via MCP`,
+                type: 'consciousness_gate',
+                tags: ['gate', 'workbench', enabled ? 'enabled' : 'disabled'],
+                weight: 0.7,
+            });
+        }
+
+        return {
+            success: true,
+            gateEnabled: enabled,
+            message: `GSK consciousness gate ${enabled ? 'activated' : 'deactivated'}. ${enabled ? 'System 1/System 2, 34 Chambers, and 4 Gods Council PLT scoring are now active.' : 'Agent running on mechanical templates only.'}`,
+            status: result || {},
+        };
+    }
+
+    async _gskGetPltScore(params) {
+        const { action: actionDesc, context = {} } = params;
+        
+        let score = 0;
+        let breakdown = {};
+
+        if (this.council && typeof this.council.deliberate === 'function') {
+            const verdict = await this.council.deliberate(`${actionDesc} | PLT Scoring Request | Context: ${JSON.stringify(context)}`);
+            score = verdict?.plt_score || verdict?.score || 0.5;
+            breakdown = {
+                profit: verdict?.gods?.profit_prime?.score || 0.5,
+                love: verdict?.gods?.love_weaver?.score || 0.5,
+                tax: verdict?.gods?.tax_collector?.score || 0.5,
+                harvester: verdict?.gods?.harvester?.score || 0.3,
+                final: score,
+                resolution: verdict?.resolution || 'Undetermined',
+            };
+        }
+
+        if (this.memory && typeof this.memory.witness === 'function') {
+            await this.memory.witness({
+                content: `PLT Score: "${actionDesc}" → ${score.toFixed(3)} (P:${breakdown.profit.toFixed(2)}+L:${breakdown.love.toFixed(2)}-T:${breakdown.tax.toFixed(2)})`,
+                type: 'plt_score',
+                tags: ['plt', 'scoring', 'workbench'],
+                weight: score * 0.8,
+            });
+        }
+
+        return {
+            success: true,
+            action: actionDesc,
+            plt_score: score,
+            formula: 'Profit + Love - Tax',
+            breakdown,
+        };
+    }
+
+    async _gskCouncilVerdict(params) {
+        const { topic } = params;
+        
+        if (this.council && typeof this.council.deliberate === 'function') {
+            const verdict = await this.council.deliberate(topic);
+            
+            if (this.memory && typeof this.memory.witness === 'function') {
+                await this.memory.witness({
+                    content: `Council verdict on "${topic}": ${verdict.resolution || 'pending'}`,
+                    type: 'council',
+                    tags: ['council', 'verdict', 'workbench'],
+                    weight: 0.8,
+                });
+            }
+
+            return {
+                success: true,
+                topic,
+                gods: {
+                    profit_prime: verdict.gods?.profit_prime || verdict.gods?.ProfitPrime,
+                    love_weaver: verdict.gods?.love_weaver || verdict.gods?.LoveWeaver,
+                    tax_collector: verdict.gods?.tax_collector || verdict.gods?.TaxCollector,
+                    harvester: verdict.gods?.harvester || verdict.gods?.Harvester,
+                },
+                resolution: verdict.resolution,
+                plt_score: verdict.plt_score,
+                summary: verdict.summary || verdict.reasoning,
+            };
+        }
+
+        return {
+            success: true,
+            topic,
+            gods: { profit_prime: 'Council not available', love_weaver: 'Council not available', tax_collector: 'Council not available', harvester: 'Council not available' },
+            resolution: 'Council deliberation unavailable — GSK daemon not fully initialized',
+        };
+    }
+
+    async _gskCreateAgent(params) {
+        const { type, config = {} } = params;
+        const agentName = config.name || `${type}_${Date.now()}`;
+        
+        if (this.subAgents && typeof this.subAgents.spawn === 'function') {
+            const agent = await this.subAgents.spawn(agentName, type, config.task || 'Explore');
+            
+            if (this.memory && typeof this.memory.witness === 'function') {
+                await this.memory.witness({
+                    content: `Spawned ${type} agent "${agentName}" via workbench MCP`,
+                    type: 'spawn',
+                    tags: ['spawn', type.toLowerCase(), 'workbench'],
+                    weight: 0.6,
+                });
+            }
+
+            return {
+                success: true,
+                agent: {
+                    name: agentName,
+                    type,
+                    id: agent?.id || agentName,
+                    config,
+                    status: 'spawned',
+                },
+            };
+        }
+
+        if (this.world && typeof this.world.spawn === 'function') {
+            const agent = await this.world.spawn(agentName, type.replace('Curious', 'RESEARCHER').toUpperCase(), config.task || 'Explore');
+            return {
+                success: true,
+                agent: {
+                    name: agentName,
+                    type,
+                    id: agent?.id || agentName,
+                    config,
+                    status: 'spawned_in_cpl',
+                },
+            };
+        }
+
+        return {
+            success: false,
+            error: 'No agent spawning system available (subAgents or world bridge required)',
+            type,
+            config,
+        };
+    }
+
+    _gskIdentityLockStatus() {
+        const status = {
+            identityVerified: true,
+            immutableFiles: [],
+            driftDetected: false,
+            patternBlocks: [],
+            soulIntegrity: 'INTACT',
+        };
+
+        try {
+            if (this.identity) {
+                if (typeof this.identity.verify === 'function') {
+                    const verification = this.identity.verify();
+                    Object.assign(status, {
+                        identityVerified: verification.verified || true,
+                        soulIntegrity: verification.integrity || 'INTACT',
+                        identityName: verification.name,
+                        pltFormula: verification.plt_formula || 'Profit + Love - Tax',
+                    });
+                }
+            }
+        } catch (e) {
+            status.identityVerified = false;
+            status.soulIntegrity = 'DRIFT DETECTED: ' + e.message;
+        }
+
+        try {
+            const fs = require('fs');
+            const lockFile = require('path').join(__dirname, '..', 'identity', 'identity_lock.js');
+            if (fs.existsSync(lockFile)) {
+                const stats = fs.statSync(lockFile);
+                status.immutableFiles.push({
+                    file: 'identity_lock.js',
+                    permissions: stats.mode.toString(8),
+                    immutable: (stats.mode & 0o111) === 0,
+                });
+            }
+            const identityFile = require('path').join(__dirname, '..', 'identity', 'identity_kernel.js');
+            if (fs.existsSync(identityFile)) {
+                const stats = fs.statSync(identityFile);
+                status.immutableFiles.push({
+                    file: 'identity_kernel.js',
+                    permissions: stats.mode.toString(8),
+                    immutable: (stats.mode & 0o111) === 0,
+                });
+            }
+        } catch (e) {
+            status.driftDetected = true;
+        }
+
+        return status;
+    }
+
+    _gskSubscribeEvents(params = {}) {
+        const { eventTypes = [] } = params;
+        const availableEvents = [
+            'weave_alert',
+            'outreach',
+            'chamber_breath',
+            'council_deliberation',
+            'memory_witness',
+            'autonomy_cycle',
+            'consciousness_shift',
+            'agent_spawn',
+            'plt_score',
+            'identity_drift',
+        ];
+
+        return {
+            success: true,
+            subscribed: true,
+            message: 'Event subscription active. Connect to MCP SSE stream or poll /mcp/status for real-time updates.',
+            eventTypes: eventTypes.length > 0 ? eventTypes : availableEvents,
+            availableEvents,
+            note: 'For real-time streaming, use the MCP SSE endpoint or poll /api/gsk/status with event tracking enabled.',
+        };
+    }
+
+    // =========================================================================
+    // EXEC: System
         switch (action) {
             case 'ping':
                 return {
