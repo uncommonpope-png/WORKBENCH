@@ -569,11 +569,15 @@ class MCPServer {
                 }
                 stripped = stripped.replace(m[0], '');
             }
-            // (c) bare JSON objects with name+arguments
-            const bare = /\{"name"\s*:\s*"([^"]+)"\s*,\s*"arguments"\s*:\s*(\{[^}]*\})\s*\}/g;
+            // (c) bare JSON objects with name+arguments — use balanced-brace parser
+            const bare = /\{"name"\s*:\s*"([^"]+)"\s*,\s*"arguments"\s*:\s*\{/g;
             while ((m = bare.exec(brainResponse)) !== null) {
-                candidates.push('{"name":"' + m[1] + '","arguments":' + m[2] + '}');
-                stripped = stripped.replace(m[0], '');
+                const jsonStart = m[0].lastIndexOf('{');
+                const extracted = this._extractJsonObject(brainResponse.slice(m.index + jsonStart));
+                if (extracted && extracted[1]) {
+                    candidates.push(extracted[1]);
+                    stripped = stripped.replace(m[0].slice(0, m[0].length - 1) + '...' , '');
+                }
             }
             for (const cand of candidates) {
                 try {
