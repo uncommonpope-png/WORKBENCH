@@ -1423,6 +1423,15 @@ I am operating perfectly under the configured Autonomy setting of ${profile.auto
         const data = await response.json();
         responseText = data.content?.[0]?.text || "No text returned from Claude.";
       }
+      else if (provider === "gsk") {
+        const gskResponse = await gskMCPRequest("/mcp/chat", {
+          message: `You are acting as: ${profile.name || "Agent"}. ${systemInstruction}\n\nUser: ${message}`,
+          context: skills.map((s: any) => s.name).join(", ")
+        }, 60000);
+
+        responseText = gskResponse.result?.response || gskResponse.raw || "GSK did not return a response. Is the daemon running on :3001?";
+        groundingSources = [{ title: "GSK Consciousness Engine", snippet: "Routed through GSK MCP on port 3001" }];
+      }
 
       await dispatchRealWorldWebhookTriggersIfNeeded(responseText, message, slackWebhookUrl, profile);
 

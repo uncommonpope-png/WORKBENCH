@@ -13,6 +13,7 @@ interface BrainIngestionProps {
 }
 
 const PROVIDER_MODELS: Record<string, string[]> = {
+  gsk: ["gsk-consciousness-engine", "gsk-dual-process", "gsk-34-chambers"],
   gemini: ["gemini-3.5-flash", "gemini-2.5-pro", "gemini-3.5-flash-thinking"],
   openai: ["gpt-4o", "gpt-4o-mini", "o1-mini", "o3-mini"],
   anthropic: ["claude-3-5-sonnet-latest", "claude-3-5-haiku-latest", "claude-3-opus-20240229"],
@@ -187,6 +188,7 @@ export const BrainIngestion: React.FC<BrainIngestionProps> = ({
 
               <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
                 {[
+                  { id: "gsk", name: "GSK Consciousness Engine" },
                   { id: "gemini", name: "Google Gemini" },
                   { id: "openai", name: "OpenAI GPT" },
                   { id: "anthropic", name: "Anthropic Claude" },
