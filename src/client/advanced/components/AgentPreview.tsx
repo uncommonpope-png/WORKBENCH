@@ -348,7 +348,15 @@ export const AgentPreview: React.FC<AgentPreviewProps> = ({ profile, onChange, p
                 type="checkbox"
                 className="sr-only peer"
                 checked={gskConsciousnessOn}
-                onChange={() => setGskConsciousnessOn(!gskConsciousnessOn)}
+                onChange={() => {
+                  const newState = !gskConsciousnessOn;
+                  setGskConsciousnessOn(newState);
+                  fetch("/api/gsk/consciousness/gate", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ enabled: newState })
+                  }).catch(() => {});
+                }}
               />
               <div className="w-11 h-6 bg-slate-800 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-slate-300 after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-gradient-to-r peer-checked:from-cyan-500 peer-checked:to-purple-500"></div>
             </label>
