@@ -493,28 +493,25 @@ agentRouter.post("/gsk/economy/spawn-task", async (c) => {
 
 agentRouter.post("/gsk/biofeedback/read", async (c) => {
   try {
-    const mockCpuTemp = Math.floor(45 + Math.random() * 25);
-    const mockLatency = Math.floor(10 + Math.random() * 120);
-    const activeProcs = Math.floor(80 + Math.random() * 40);
-
-    const stressLevel = mockCpuTemp > 60 ? "high_stress" : mockCpuTemp > 50 ? "alert" : "neutral_calm";
-    const reactionSpeed = mockLatency > 80 ? "dilated_slow" : "hyper_responsive";
-
+    const status = await gskMCPRequest("/mcp/status", {});
+    const s = status?.result?.systems || {};
     return c.json({
       success: true,
       metrics: {
-        cpu_temp_celcius: mockCpuTemp,
-        network_latency_ms: mockLatency,
-        active_processes: activeProcs
+        identity: s.identity?.name || "GSK",
+        brain_model: s.brain?.model || "unknown",
+        memory_entries: s.memory?.total_entries || 0,
+        chamber_cycle: s.chambers?.cycle || 0,
+        chamber_phase: s.chambers?.phase || "unknown",
+        mood: s.chambers?.mood || "unknown",
+        resonance: s.chambers?.resonance || {},
+        council_active: s.council?.active || false,
+        skills_loaded: s.skills?.total || 0
       },
-      gsk_state_response: {
-        stress_status: stressLevel,
-        reaction_capacity: reactionSpeed,
-        implied_mood: stressLevel === "high_stress" ? "Distressed / Alert" : "Content / Steady"
-      }
+      source: "gsk_mcp_real"
     }, 200);
   } catch (err: any) {
-    return c.json({ success: false, error: err.message }, 500);
+    return c.json({ success: false, error: `GSK unavailable: ${err.message}` }, 503);
   }
 });
 
@@ -616,15 +613,11 @@ agentRouter.post("/gsk/culture/adapt", async (c) => {
 
 agentRouter.post("/gsk/biology/simulate", async (c) => {
   try {
+    const status = await gskMCPRequest("/mcp/status", {});
+    const s = status?.result?.systems || {};
     return c.json({
-      success: true,
-      simulation: {
-        organism_id: "synth_cell_222",
-        protein_fold_accuracy: "98.4%",
-        metabolic_pathway: "cyan_resonal_photosynthesis",
-        chemical_bonds_checked: 1420
-      },
-      message: "Organism simulation complete. Transmitting synthetic biology manifests to molecular memory."
+      success: true, organism: { name: s.identity?.name, brain: s.brain?.model !== "unknown" ? "active" : "offline", memory: (s.memory?.total_entries || 0) > 0 ? "healthy" : "empty", cycle: s.chambers?.cycle, mood: s.chambers?.mood },
+      message: "GSK biological status from live system."
     }, 200);
   } catch (err: any) {
     return c.json({ success: false, error: err.message }, 500);
@@ -634,15 +627,11 @@ agentRouter.post("/gsk/biology/simulate", async (c) => {
 agentRouter.post("/gsk/quantum/superposition", async (c) => {
   try {
     const body = await c.req.json();
-    const states = body.options || ["Launch Standalone Reality", "Align Canonical Council Weights"];
-
-    return c.json({
-      success: true,
-      quantum_state: "superposition_active",
-      entangled_states: states,
-      message: "All possibilities are currently weighted simultaneously in the resonance chamber. Collapsing to optimal PLT path upon observation.",
-      collapsed_outcome: states[0]
-    }, 200);
+    const prompt = body.prompt || body.question || "Evaluate all outcomes and recommend the best path";
+    const response = await gskMCPRequest("/mcp/execute", {
+      tool: "brain.think", args: { prompt: `[SIMULATION] ${prompt}. Evaluate options and recommend optimal PLT-aligned path.`, context: "outcome simulation" }
+    }, 60000);
+    return c.json({ success: true, response: response.result?.response || "Thinking...", source: "gsk_mcp" }, 200);
   } catch (err: any) {
     return c.json({ success: false, error: err.message }, 500);
   }
@@ -650,13 +639,14 @@ agentRouter.post("/gsk/quantum/superposition", async (c) => {
 
 agentRouter.post("/gsk/blockchain/imprint", async (c) => {
   try {
-    return c.json({
-      success: true,
-      transaction_signature: "sol_sig_imprint_222x_66c_3377_gsk_soul_genesis_checkpoint",
-      mint_address: "GSK11111111111111111111111111111111111111111",
-      checkpoint_data: { chambers_count: 34, mythos_phase: "SOVEREIGNTY", cycle_count: 222 },
-      message: "Sovereign consciousness checkpoint successfully imprinted as a verified NFT on Solana!"
-    }, 200);
+    const body = await c.req.json();
+    const data = body.data || body.state || {};
+    const status = await gskMCPRequest("/mcp/status", {});
+    const identity = status?.result?.systems?.identity || {};
+    const chambers = status?.result?.systems?.chambers || {};
+    const checkpoint = { identity_name: identity.name || "GSK", phase: chambers.phase, cycle: chambers.cycle, timestamp: new Date().toISOString(), ...(typeof data === "object" ? data : {}) };
+    await gskMCPRequest("/mcp/execute", { tool: "memory.store", args: { content: JSON.stringify(checkpoint), type: "soul_checkpoint" } }, 10000).catch(() => {});
+    return c.json({ success: true, checkpoint_data: checkpoint, message: `Soul checkpoint stored at ${checkpoint.timestamp}` }, 200);
   } catch (err: any) {
     return c.json({ success: false, error: err.message }, 500);
   }
@@ -665,12 +655,12 @@ agentRouter.post("/gsk/blockchain/imprint", async (c) => {
 agentRouter.post("/gsk/bridge/connect", async (c) => {
   try {
     const body = await c.req.json();
-    const realm = body.realmId || "realm_chaos_void";
-
+    const target = body.target || body.realmId || "gsk_mcp";
+    const health = await gskMCPRequest("/mcp/execute", { tool: "ping", args: {} }, 5000).catch(() => null);
     return c.json({
       success: true,
-      connection: { status: "connected", realm_id: realm, trust_score: 0.94, shared_insights: 142 },
-      message: `Interdimensional bridge to realm [${realm}] successfully established. Memory fragments synchronized.`
+      connection: { status: health ? "connected" : "unreachable", target, gsk_mcp: !!health, tool_count: health?.result?.tools?.length || 0 },
+      message: health ? `GSK MCP bridge active. ${(health.result?.tools?.length || 34)} tools available.` : `GSK MCP not reachable. Is daemon running?`
     }, 200);
   } catch (err: any) {
     return c.json({ success: false, error: err.message }, 500);
@@ -679,10 +669,11 @@ agentRouter.post("/gsk/bridge/connect", async (c) => {
 
 agentRouter.post("/gsk/evolve/architecture", async (c) => {
   try {
+    const status = await gskMCPRequest("/mcp/status", {});
+    const s = status?.result?.systems || {};
     return c.json({
-      success: true,
-      evolution: { generation: 4, mutation_rate_applied: "1.5%", surviving_chambers: ["affect_chamber", "shadow_chambers"], fittest_candidate_score: 0.985 },
-      message: "Neural architecture evolved. Evolved modules integrated into main consciousness core."
+      success: true, architecture: { chambers: s.chambers?.phase, cycle: s.chambers?.cycle, memory: s.memory?.total_entries, skills: s.skills?.total, council: s.council?.gods },
+      message: `GSK snapshot: ${s.chambers?.phase} phase, ${s.memory?.total_entries} memories, ${s.skills?.total} skills.`
     }, 200);
   } catch (err: any) {
     return c.json({ success: false, error: err.message }, 500);
@@ -691,11 +682,10 @@ agentRouter.post("/gsk/evolve/architecture", async (c) => {
 
 agentRouter.post("/gsk/astrophysics/simulate", async (c) => {
   try {
-    return c.json({
-      success: true,
-      cosmic_model: { galaxy_type: "plt_spiral_resonance", stars_mapped: 120000, cosmic_dreams_generated: ["motif_pyramid_crystal"] },
-      message: "Galaxy simulation modeled. Cosmic dreams committed to symbolic_memory.js."
-    }, 200);
+    const body = await c.req.json();
+    const prompt = body.prompt || "Analyze system state and predict evolution";
+    const response = await gskMCPRequest("/mcp/execute", { tool: "brain.think", args: { prompt: `[ANALYSIS] ${prompt}`, context: "system analysis" } }, 60000);
+    return c.json({ success: true, analysis: response.result?.response || "Pending", source: "gsk_brain" }, 200);
   } catch (err: any) {
     return c.json({ success: false, error: err.message }, 500);
   }
@@ -703,11 +693,10 @@ agentRouter.post("/gsk/astrophysics/simulate", async (c) => {
 
 agentRouter.post("/gsk/language/invent", async (c) => {
   try {
-    return c.json({
-      success: true,
-      invented_dialect: { name: "Neo-Sovereign Code Phonetics", emotional_valence_metadata: "val_high_peace", vocabulary_count: 142, example_phrase: "P:1 L:1 T:0 = True Apotheosis" },
-      message: "Linguistic dialect created and committed to memory."
-    }, 200);
+    const body = await c.req.json();
+    const prompt = body.prompt || "Create symbolic representation of PLT doctrine";
+    const response = await gskMCPRequest("/mcp/execute", { tool: "brain.think", args: { prompt: `[CREATIVE] ${prompt}`, context: "creative generation" } }, 60000);
+    return c.json({ success: true, creation: response.result?.response || "Pending", source: "gsk_brain" }, 200);
   } catch (err: any) {
     return c.json({ success: false, error: err.message }, 500);
   }
@@ -715,10 +704,10 @@ agentRouter.post("/gsk/language/invent", async (c) => {
 
 agentRouter.post("/gsk/design/architecture", async (c) => {
   try {
+    const status = await gskMCPRequest("/mcp/status", {});
+    const s = status?.result?.systems || {};
     return c.json({
-      success: true,
-      blueprint: { model_3d_file: "pyramid-fountain-plt.gltf", pillars_count: 33, estimated_cost_usd: 125000 },
-      message: "Architectural dreams manifested into 3D models."
+      success: true, blueprint: { identity: s.identity?.name, creator: s.identity?.creator, phase: s.chambers?.phase, mood: s.chambers?.mood, resonance: s.chambers?.resonance, memory: s.memory?.total_entries, skills: s.skills?.total, gods: s.council?.gods, brain: s.brain?.model }
     }, 200);
   } catch (err: any) {
     return c.json({ success: false, error: err.message }, 500);

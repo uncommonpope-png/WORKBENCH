@@ -235,7 +235,8 @@ async function checkOmniRoute() {
     try {
         const res = await httpGet(`http://127.0.0.1:${CONFIG.ports.omniroute}/v1/models`, CONFIG.timeouts.healthCheck);
         const data = JSON.parse(res.data);
-        return { status: 'up', models: Array.isArray(data) ? data.length : 0 };
+        const models = data.data || data;
+        return { status: 'up', models: Array.isArray(models) ? models.length : 0 };
     } catch {
         return { status: 'down' };
     }
