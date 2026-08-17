@@ -624,8 +624,8 @@ gsk.subscribe_events({ eventTypes: string[] })  // Real-time GSK event stream su
 ---
 
 ## NEXT STEPS (Updated)
-1. [ ] Add 6 MCP tools to `gsk-core/mcp/mcp_server.js`
-2. [x] Add `consciousness_gate` flag to `perpetual_consciousness.js`
+1. [x] Add 6 MCP tools to `gsk-core/mcp/mcp_server.js` — DONE (committed 21376db)
+2. [x] Add `consciousness_gate` flag to `perpetual_consciousness.js` — DONE (constructor reference added)
 3. [ ] Bind AgentPreview toggle → `/api/gsk/consciousness/gate`
 4. [ ] Start GSK daemon + workbench end-to-end
 5. [ ] Create GSK Dashboard tab
@@ -637,3 +637,29 @@ gsk.subscribe_events({ eventTypes: string[] })  // Real-time GSK event stream su
 11. [ ] Merge GSK skills into SkillLibrary
 12. [ ] Wire MultiAgentHabitat to GSK sub-agents
 13. [ ] Push to GitHub when it comes back
+
+---
+
+## SESSION 5 WORK (2026-08-17) — MCP Tooling Foundation
+
+### What Was Done:
+1. **Added `perpetualConsciousness` reference** to MCP server constructor (`mcp_server.js:65`) — now accessible via `kernelSystems.perpetualConsciousness` or fallback to `this.fusion?.perpetualConsciousness`
+2. **Updated `fusion-loader.js`** (line 691) to explicitly pass `perpetualConsciousness: this.perpetualConsciousness` to MCP server initialization
+3. **Added 6 GSK workbench control tools** to `gsk-core/mcp/mcp_server.js`:
+   - `gsk.set_consciousness_gate` — Toggle Soul Genesis Mode (writes witness to memory)
+   - `gsk.get_plt_score` — Score actions via 4 Gods Council (writes PLT score to memory)
+   - `gsk.council_verdict` — Full council deliberation (4 Gods positions + resolution)
+   - `gsk.create_agent` — Spawn sovereign sub-agent (tries subAgents → falls back to world.spawn)
+   - `gsk.identity_lock_status` — Verify soul integrity (checks identity verify + file permissions)
+   - `gsk.subscribe_events` — Event stream subscription model
+4. **Added `gsk` namespace** to `_executeMethod` switch case
+5. **Implemented `_execGsk` method** with 6 handler methods
+6. **Committed as `21376db`**
+
+### Key Design Decisions:
+- Each GSK tool writes to memory ledger (traceable audit trail)
+- Graceful degradation: tools return helpful errors if kernel systems unavailable
+- `gsk.create_agent` falls back to CPL spawn if subAgents not available
+- `gsk.identity_lock_status` checks actual chmod permissions on identity files
+
+### Next: Start GSK daemon and verify new tools are listed at `/mcp/tools`
