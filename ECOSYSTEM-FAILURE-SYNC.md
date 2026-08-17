@@ -243,6 +243,13 @@ GROQ_API_KEY=                ← Not set
 8. [x] Verify GSK MCP on port 3001 — VERIFIED RUNNING with 34 chambers, 4 Gods, 210 skills
 9. [ ] Consolidate identity into identity_kernel.json — STILL NEEDS DOING
 10. [x] Start GSK daemon properly (fusion-loader → brain → MCP) — DONE via `gsk-harness.cjs start`
+11. [x] Wire REAL workbench (`buyasoul-workbench/server.ts`) to GSK MCP :3001 — DONE (10 proxy endpoints)
+12. [x] Add `"gsk"` to workbench ProviderConfig types — DONE
+13. [x] Add GSK provider to workbench UI dropdown (BrainIngestion.tsx) — DONE
+14. [x] Add GSK chat routing in server.ts chat handler — DONE (provider === "gsk" branch)
+15. [ ] Start workbench (`npm run dev`) and verify end-to-end — NOT YET TESTED
+16. [ ] Wire Consciousness Gate in REAL workbench AgentPreview.tsx — NOT DONE
+17. [ ] Push all commits when GitHub comes back — BLOCKED (GitHub down)
 
 ---
 
