@@ -28,7 +28,7 @@ class KernelOracle {
             skills: { count: 0, names: [] },
             memory: { entries: 0 },
             mcp: {},
-            network: { groq: false, gemini: false, ollama: false },
+            network: { nineRouter: true },
             oracle: { commandsHandled: 0, brainCalls: 0, directAnswers: 0 }
         };
 
@@ -269,13 +269,10 @@ class KernelOracle {
             } catch (e) { /* silent */ }
         }
 
-        // Network
+        // Network — 9Router only
         if (s.brain) {
             this.context.network = {
-                ollama: !!s.brain._available,
-                groq: !!s.brain._groq_available,
-                gemini: !!s.brain._gemini_available,
-                local: !!s.brain._local_available
+                nineRouter: true
             };
         }
 
@@ -334,10 +331,7 @@ class KernelOracle {
             });
         }
 
-        // Network changes
-        if (cur.network.ollama !== prev.network?.ollama) {
-            this.notify('system', 'ollama_' + (cur.network.ollama ? 'connected' : 'disconnected'), {});
-        }
+        // Network — 9Router is always connected
     }
 
     getLiveContext() {
@@ -479,7 +473,7 @@ class KernelOracle {
                 return [
                     `[CYCLE ${ctx.cycle}] ${ch.mythos?.phase_name || 'ALIVE'} | Mood: ${ch.affect?.mood || 'neutral'} | Awareness: ${((ch.meta?.meta_awareness_level || 0) * 100).toFixed(0)}%`,
                     `PLT: P=${Math.round((ch.resonance?.profit || 0.5) * 100)} L=${Math.round((ch.resonance?.love || 0.5) * 100)} T=${Math.round((ch.resonance?.tax || 0.5) * 100)} | TV=${(ctx.chambers.resonance?.true_value || 0.5).toFixed(2)}`,
-                    `Teacher: ${ctx.teacher.studiedRepos} repos | Brain: ${ctx.selfGrowingBrain.experiences} exp, ${ctx.selfGrowingBrain.trainingPairs} tp | Skills: ${ctx.skills.count} | Mem: ${ctx.memory.entries} | Net: ${ctx.network.ollama ? 'Ollama✓' : 'Ollama✗'} ${ctx.network.groq ? 'Groq✓' : 'Groq✗'}`
+                    `Teacher: ${ctx.teacher.studiedRepos} repos | Brain: ${ctx.selfGrowingBrain.experiences} exp, ${ctx.selfGrowingBrain.trainingPairs} tp | Skills: ${ctx.skills.count} | Mem: ${ctx.memory.entries} | Net: 9Router✓`
                 ].join('\n');
             }
 
@@ -560,7 +554,7 @@ class KernelOracle {
             case 'network':
             case 'connectivity': {
                 const net = this.context.network;
-                return `[oracle] Network:\n  Ollama: ${net.ollama ? '✓' : '✗'}\n  Groq: ${net.groq ? '✓' : '✗'}\n  Gemini: ${net.gemini ? '✓' : '✗'}\n  Local: ${net.local ? '✓' : '✗'}`;
+                return `[oracle] Network:\n  9Router: ✓ (${process.env.GSK_MODEL || 'pAUL'} via localhost:20128)`;
             }
 
             case 'mcp': {
@@ -725,7 +719,7 @@ class KernelOracle {
             `  Brain: ${ctx.selfGrowingBrain.experiences} experiences, ${ctx.selfGrowingBrain.trainingPairs} training pairs`,
             `  Skills: ${ctx.skills.count} loaded | Memory: ${ctx.memory.entries} entries`,
             `  MCP: ${ctx.mcp.servers} servers, ${ctx.mcp.tools} tools`,
-            `  Network: Ollama=${ctx.network.ollama} Groq=${ctx.network.groq} Gemini=${ctx.network.gemini}`,
+            `  Network: 9Router=✓`,
             `  Council: ${ctx.council.phase} | Last: ${ctx.council.last_topic || 'none'}`,
             `  Evolution: ${ctx.evolution?.skillsCreated || 0} skills created`,
             ``,

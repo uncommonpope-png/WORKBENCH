@@ -329,24 +329,14 @@ class WebSocketBridge {
       try { skillsList = this._skills.listSkills() || []; } catch(e) {}
     }
 
-    // Models (from Ollama via brain)
-    let modelsList = [];
-    if (this._brain && typeof this._brain.check === 'function') {
-      try {
-        const ollamaCheck = this._brain._ollamaStatus || {};
-        modelsList = (ollamaCheck.models || []).map(m => ({
-          name: m,
-          size: '',
-          backend: 'ollama',
-          ready: true,
-          active: m === (this._brain._currentModel || '')
-        }));
-      } catch(e) {}
-    }
-    if (modelsList.length === 0) {
-      const builtInModels = ['gsk-brain:latest', 'llama3.2:1b', 'llama3.2:3b', 'hermes3:3b', 'qwen3:1.7b'];
-      modelsList = builtInModels.map(m => ({ name: m, size: '', backend: 'ollama', ready: true, active: false }));
-    }
+    // Models (via 9Router)
+    let modelsList = [{
+      name: process.env.GSK_MODEL || 'pAUL',
+      size: '',
+      backend: '9router',
+      ready: true,
+      active: true
+    }];
 
     // Config
     const config = {
@@ -537,16 +527,13 @@ class WebSocketBridge {
         }
 
         case 'get_models': {
-          let models = [];
-          if (this._brain && this._brain._ollamaStatus?.models) {
-            models = this._brain._ollamaStatus.models.map(m => ({
-              name: m, size: '', backend: 'ollama', ready: true, active: m === (this._brain._currentModel || '')
-            }));
-          }
-          if (models.length === 0) {
-            models = ['gsk-brain:latest','llama3.2:1b','llama3.2:3b','hermes3:3b','qwen3:1.7b']
-              .map(m => ({ name: m, size: '', backend: 'ollama', ready: true, active: false }));
-          }
+          const models = [{
+            name: process.env.GSK_MODEL || 'pAUL',
+            size: '',
+            backend: '9router',
+            ready: true,
+            active: true
+          }];
           result = { success: true, models };
           break;
         }

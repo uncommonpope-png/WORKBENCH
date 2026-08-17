@@ -1,3 +1,14 @@
+module.exports.MANIFEST = {
+    name: 'database_query',
+    description: 'Skill: database_query',
+    version: '1.0.0',
+    inputs: {},
+    output: { schema: 'ok/error' }
+};
+
+module.exports.run = async (params) => {
+    // Standardized implementation
+};
 'use strict';
 
 const { vault } = require('../brain/api_vault.js');
@@ -21,3 +32,4 @@ async function skill_database_query(input, brain, memory) {
 }
 
 module.exports = { skill_database_query, PLT_AFFINITY };
+

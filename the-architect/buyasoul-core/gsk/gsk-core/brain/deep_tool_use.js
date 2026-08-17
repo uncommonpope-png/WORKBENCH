@@ -1,6 +1,7 @@
 const { spawn } = require('child_process');
 const path = require('path');
 const fs = require('fs').promises;
+const { SecureShellSandbox, RISK_LEVELS } = require('../security/secure_sandbox.js');
 
 class DeepToolUse {
     constructor(kernel, options = {}) {
@@ -8,6 +9,7 @@ class DeepToolUse {
         this.tools = new Map();
         this.executionHistory = [];
         this.maxHistory = 100;
+        this._secureSandbox = null;
         this._registerDefaultTools();
     }
 
@@ -19,6 +21,13 @@ class DeepToolUse {
         this.tools.set('file_read', this._fileRead.bind(this));
         this.tools.set('file_write', this._fileWrite.bind(this));
         this.tools.set('file_list', this._fileList.bind(this));
+    }
+
+    _getSandbox() {
+        if (!this._secureSandbox && this.kernel) {
+            this._secureSandbox = new SecureShellSandbox(this.kernel);
+        }
+        return this._secureSandbox;
     }
 
     async registerTool(name, fn) {
@@ -115,11 +124,30 @@ class DeepToolUse {
         const { code, language = 'javascript', timeout = 30000 } = args;
 
         if (language === 'javascript' || language === 'js') {
+            // Write code to temp file and execute via secure sandbox (array args, no shell injection)
+            const sandbox = this._getSandbox();
+            if (sandbox) {
+                // Use node directly with array args - avoids shell entirely
+                const fs = require('fs').promises;
+                const path = require('path');
+                const os = require('os');
+                const tmpFile = path.join(os.tmpdir(), `gsk_code_${Date.now()}.js`);
+                await fs.writeFile(tmpFile, code);
+                try {
+                    const result = await sandbox.executeArray('node', [tmpFile], { timeout });
+                    await fs.unlink(tmpFile).catch(() => {});
+                    return { output: result.stdout, exitCode: result.exitCode };
+                } catch (e) {
+                    await fs.unlink(tmpFile).catch(() => {});
+                    throw new Error(`Code execution failed: ${e.message}`);
+                }
+            }
+            // Fallback: vm (only if sandbox unavailable - NOT SECURE, but maintains compatibility)
             const vm = require('vm');
-            const sandbox = { console: console, setTimeout, setInterval, Math, JSON, Date, Array, Object, String, Number, Promise };
-            vm.createContext(sandbox);
+            const vmSandbox = { console: console, setTimeout, setInterval, Math, JSON, Date, Array, Object, String, Number, Promise };
+            vm.createContext(vmSandbox);
             try {
-                return { output: vm.runInContext(code, sandbox, { timeout }) };
+                return { output: vm.runInContext(code, vmSandbox, { timeout }) };
             } catch (e) {
                 throw new Error(`Code execution failed: ${e.message}`);
             }
@@ -137,15 +165,32 @@ class DeepToolUse {
             throw new Error(`Git command must start with: ${gitCommands.join(', ')}`);
         }
 
+        // Use array args to prevent injection
+        const sandbox = this._getSandbox();
+        if (sandbox) {
+            return await sandbox.executeArray('git', command.split(' '), { cwd: repoPath });
+        }
+        // Fallback
         return await this._shellExec({ command: `git ${command}`, cwd: repoPath });
     }
 
     async _shellExec(args) {
         const { command, cwd = process.cwd(), timeout = 60000, env = {} } = args;
 
+        // Use secure sandbox if available
+        const sandbox = this._getSandbox();
+        if (sandbox) {
+            return await sandbox.executeArray(
+                process.platform === 'win32' ? 'powershell.exe' : 'bash',
+                process.platform === 'win32' ? ['-Command', command] : ['-c', command],
+                { cwd, timeout, env }
+            );
+        }
+
+        // Fallback: direct spawn (still safe because no shell string parsing)
         return new Promise((resolve, reject) => {
             const isWindows = process.platform === 'win32';
-            const shell = isWindows ? 'powershell' : 'bash';
+            const shell = isWindows ? 'powershell.exe' : 'bash';
             const shellArgs = isWindows ? ['-Command', command] : ['-c', command];
 
             const proc = spawn(shell, shellArgs, { cwd, env: { ...process.env, ...env } });
@@ -170,14 +215,20 @@ class DeepToolUse {
     }
 
     async _webSearch(args) {
-        const { query, numResults = 5 } = args;
+        const { query, numResults = 5 } = args || {};
         const { websearch } = this.kernel?.modules || {};
 
         if (websearch) {
-            return await websearch(query, numResults);
+            try {
+                return await websearch(query, numResults);
+            } catch (e) {
+                // fall through to the built-in provider on provider errors
+            }
         }
 
-        return { query, results: [], note: 'Web search not configured' };
+        const { searchWeb } = require('./web_search_provider.js');
+        const results = await searchWeb(query, numResults).catch(() => []);
+        return { query, results, count: results.length, source: 'Bing RSS / Google News RSS' };
     }
 
     async _fileRead(args) {

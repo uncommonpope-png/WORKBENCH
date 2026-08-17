@@ -1,5 +1,3 @@
-const GROQ_API_URL = 'https://api.groq.com/openai/v1/chat/completions';
-
 class ReActLoop {
     constructor(kernel, brain) {
         this.kernel = kernel;
@@ -15,11 +13,13 @@ class ReActLoop {
         for (let i = 0; i < this.maxIterations; i++) {
             const thought = await this.reason(observation, history, context);
             history.push({ type: 'reason', iteration: i, content: thought });
+            this._publish('react.step.completed', { iteration: i, type: 'reason', content: thought.substring(0, 300) });
 
             if (this.requiresAction(thought)) {
                 const action = this.extractAction(thought);
                 const result = await this.executeAction(action, context);
                 history.push({ type: 'action', iteration: i, content: action, result });
+                this._publish('react.step.completed', { iteration: i, type: 'action', action: action.type, output: String(result.output || '').substring(0, 300) });
                 observation = result.output || result;
             } else if (this.isComplete(thought, history, context)) {
                 return this.synthesize(history);
@@ -27,6 +27,12 @@ class ReActLoop {
         }
 
         return this.synthesize(history);
+    }
+
+    _publish(event, data) {
+        try {
+            this.kernel?.systems?.eventBus?.publish?.(event, { ...data, timestamp: Date.now() });
+        } catch (e) { /* bus publishing is best-effort */ }
     }
 
     async reason(observation, history, context) {

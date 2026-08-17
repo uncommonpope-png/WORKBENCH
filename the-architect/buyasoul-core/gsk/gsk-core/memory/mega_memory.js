@@ -85,6 +85,12 @@ class MegaMemory {
             content: truncated ? content.substring(0, 5000) + '...[truncated]' : content,
             causal_links: entry.causal_links || [],
             meta: entry.meta || {},
+            // mem0/letta structural fields
+            key: entry.key || null,
+            superseded_by: entry.superseded_by || null,
+            supersedes: entry.supersedes || null,
+            mem_type: entry.mem_type || null,
+            version: entry.version || 1,
         };
         
         const line = JSON.stringify(record) + '\n';
@@ -119,19 +125,21 @@ class MegaMemory {
             limit = 100,
             sort_by = 'weight',
             sort_order = 'desc',
+            includeSuperseded = false,
         } = options;
-        
+
         const entries = [];
         const lines = fs.readFileSync(this.ledgerPath, 'utf8').split('\n');
-        
+
         for (const line of lines) {
             if (!line.trim()) continue;
             try {
                 const entry = JSON.parse(line);
-                
+
+                if (!includeSuperseded && entry.superseded_by) continue;
                 if (type && entry.type !== type) continue;
                 if (entry.weight < weight_min || entry.weight > weight_max) continue;
-                
+
                 if (tags.length > 0) {
                     const hasAllTags = tags.every(t => entry.tags.includes(t));
                     if (!hasAllTags) continue;
@@ -387,6 +395,156 @@ class MegaMemory {
     // CLEAR — Reset the ledger (use with caution)
     // =========================================================================
     
+    // =========================================================================
+    // RECALL — Context-aware retrieval (mem0 pattern graft)
+    // Returns entries most relevant to a context string, scored by
+    // keyword overlap against content/tags. Works offline (no embeddings).
+    // =========================================================================
+
+    recall(context, limit = 10, minScore = 0.05) {
+        const ctx = String(context || '').toLowerCase();
+        if (!ctx.trim()) return [];
+        const ctxTerms = new Set(ctx.match(/\b\w{3,}\b/g) || []);
+        if (ctxTerms.size === 0) return [];
+
+        const lines = fs.readFileSync(this.ledgerPath, 'utf8').split('\n');
+        const scored = [];
+
+        for (const line of lines) {
+            if (!line.trim()) continue;
+            try {
+                const entry = JSON.parse(line);
+                const content = ((entry.content || '') + ' ' + (entry.tags || []).join(' ')).toLowerCase();
+                const contentTerms = new Set(content.match(/\b\w{3,}\b/g) || []);
+                let overlap = 0;
+                for (const term of ctxTerms) {
+                    if (contentTerms.has(term)) overlap++;
+                }
+                const score = ctxTerms.size > 0 ? overlap / ctxTerms.size : 0;
+                if (score >= minScore) {
+                    scored.push({ ...entry, _relevance: score });
+                }
+            } catch (e) { /* skip */ }
+        }
+
+        scored.sort((a, b) => (b._relevance * b.weight) - (a._relevance * a.weight));
+        return scored.slice(0, limit);
+    }
+
+    // =========================================================================
+    // ARCHIVAL — Retrieve long-term memory entries (letta pattern graft)
+    // In letta, "archival memory" holds stable facts that persist across
+    // sessions. Here we flag entries with mem_type='archival' or tag that.
+    // =========================================================================
+
+    getArchival(limit = 50) {
+        return this.query({ type: 'archival', tags: [], limit });
+    }
+
+    // =========================================================================
+    // LONG-TERM — Retrieve episodic/experiential memories
+    // =========================================================================
+
+    getLongTerm(limit = 50) {
+        return this.query({ type: 'long_term', tags: [], limit });
+    }
+
+    // =========================================================================
+    // CONTEXTUAL — Retrieve task-specific working memories
+    // =========================================================================
+
+    getContextual(limit = 20) {
+        return this.query({ type: 'contextual', tags: [], limit });
+    }
+
+    // =========================================================================
+    // UPSERT — Versioned memory update (letta pattern graft)
+    // Creates a new entry that supersedes a previous one by the same key,
+    // preserving the causal chain. The old entry remains but is marked
+    // superseded so queries can filter it out.
+    // =========================================================================
+
+    async upsert(key, entry) {
+        const existing = this.getByTags(['mem_key:' + key], 1000);
+        let supersededId = null;
+        for (const old of existing) {
+            if (old.supersedes !== true && !old.superseded_by) {
+                supersededId = old.id;
+                break;
+            }
+        }
+
+        const newEntry = {
+            ...entry,
+            key,
+            superseded_by: null,
+        };
+        if (supersededId) {
+            newEntry.supersedes = supersededId;
+        }
+
+        if (!newEntry.tags) newEntry.tags = [];
+        if (!newEntry.tags.includes('mem_key:' + key)) {
+            newEntry.tags.push('mem_key:' + key);
+        }
+
+        const record = await this.witness(newEntry);
+
+        if (supersededId) {
+            this._markSuperseded(supersededId, record.id);
+        }
+        return record;
+    }
+
+    _markSuperseded(entryId, newId) {
+        const lines = fs.readFileSync(this.ledgerPath, 'utf8').split('\n');
+        const results = [];
+        for (const line of lines) {
+            if (!line.trim()) continue;
+            try {
+                const entry = JSON.parse(line);
+                if (entry.id === entryId) {
+                    entry.superseded_by = newId;
+                    results.push(JSON.stringify(entry));
+                } else {
+                    results.push(line);
+                }
+            } catch (e) {
+                results.push(line);
+            }
+        }
+        fs.writeFileSync(this.ledgerPath, results.join('\n') + '\n');
+    }
+
+    // =========================================================================
+    // SEARCH — Full text search in content (returns scored results)
+    // =========================================================================
+
+    search(query, limit = 50) {
+        const ql = query.toLowerCase();
+        const entries = [];
+        const lines = fs.readFileSync(this.ledgerPath, 'utf8').split('\n');
+
+        for (const line of lines) {
+            if (!line.trim()) continue;
+            try {
+                const entry = JSON.parse(line);
+                if (entry.content && entry.content.toLowerCase().includes(ql) && !entry.superseded_by) {
+                    entries.push(entry);
+                }
+            } catch (e) {
+                // Skip
+            }
+        }
+
+        entries.sort((a, b) => b.weight - a.weight);
+        return entries.slice(0, limit);
+    }
+
+    // =========================================================================
+    // CLEAR — Reset the ledger (use with caution)
+    // =========================================================================
+
     clear() {
         fs.writeFileSync(this.ledgerPath, '');
         this._counter = 0;

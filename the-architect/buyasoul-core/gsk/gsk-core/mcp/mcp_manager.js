@@ -56,7 +56,10 @@ class MCPManager {
                 command: config.command,
                 args: config.args || [],
                 url: config.url,
-                env: config.env || {}
+                env: config.env || {},
+                apiKey: config.apiKey,
+                headers: config.headers,
+                transport: config.transport
             };
             
             await this.client.addServer(serverName, mcpConfig);

@@ -4,7 +4,7 @@ const path = require('path');
 class Learner {
     constructor(brainEngine, dataDir) {
         this.brain = brainEngine;
-        this.dataDir = dataDir || path.join(require('os').homedir(), '.brain-in-a-box');
+        this.dataDir = dataDir || path.join(process.env.GSK_ROOT || __dirname, 'data');
         this.watchedFiles = new Map();
         this.watchInterval = null;
         this.stats = { filesWatched: 0, filesLearnedFrom: 0, totalBytesProcessed: 0, sessions: 0 };
@@ -26,7 +26,10 @@ class Learner {
             for (const line of lines.slice(0, 200)) {
                 const clean = line.replace(/[^\w\s.,!?;:'"()-]/g, ' ').replace(/\s+/g, ' ').trim();
                 if (clean.length > 30) {
-                    this.brain.learnFromText(clean);
+                    const memory = this.brain?.memory || this.brain?.systems?.memory;
+                    if (memory && typeof memory.witness === 'function') {
+                        memory.witness({ type: 'learned_text', weight: 0.6, tags: ['learner'], content: clean, source: path.basename(filePath) }).catch(() => {});
+                    }
                     learned++;
                 }
             }
@@ -80,8 +83,10 @@ class Learner {
 
     learnFromConversation(q, a) {
         this.stats.sessions++;
-        this.brain.learnFromText(`User asked: ${q}. Response: ${a}.`);
-        this.brain.learn(q, a);
+        const memory = this.brain?.memory || this.brain?.systems?.memory;
+        if (memory && typeof memory.witness === 'function') {
+            memory.witness({ type: 'conversation', weight: 0.7, tags: ['conversation'], content: `Q: ${q}\nA: ${a}` }).catch(() => {});
+        }
     }
 
     watchDirectory(dirPath) {
@@ -102,11 +107,12 @@ class Learner {
     }
 
     getStats() {
+        const brainStats = this.brain?.stats || this.brain?.getStats?.() || {};
         return {
             ...this.stats,
             watchedFilesCount: this.watchedFiles.size,
             isWatching: this.watchInterval !== null,
-            brainLearnedItems: this.brain.stats.learnedItems,
+            brainStats,
             dataDir: this.dataDir
         };
     }

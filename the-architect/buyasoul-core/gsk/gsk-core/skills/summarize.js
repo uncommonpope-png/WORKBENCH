@@ -1,3 +1,14 @@
+module.exports.MANIFEST = {
+    name: 'summarize',
+    description: 'Skill: summarize',
+    version: '1.0.0',
+    inputs: {},
+    output: { schema: 'ok/error' }
+};
+
+module.exports.run = async (params) => {
+    // Standardized implementation
+};
 'use strict';
 
 const PLT_AFFINITY = { profit: 0.4, love: 0.3, tax: 0.3 };

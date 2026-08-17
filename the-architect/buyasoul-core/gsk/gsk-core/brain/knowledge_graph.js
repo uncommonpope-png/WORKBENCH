@@ -1,4 +1,4 @@
-'use strict';
+﻿'use strict';
 
 const fs = require('fs');
 const path = require('path');
@@ -226,10 +226,86 @@ class KnowledgeGraph {
         return count;
     }
 
+    // Phase 4 (knowledge synthesis): create a "synthesis" node that merges 2+
+    // source nodes, cross-linking them. This is how the graph grows from
+    // archiving (Seshat + GitHub scrape) to ORIGINAL synthesis.
+    addSynthesis(content, sourceIds = [], meta = {}) {
+        if (sourceIds.length < 2) return null;
+        const valid = sourceIds.filter(id => this.nodes.has(id));
+        if (valid.length < 2) return null;
+        const id = this.addNode('synthesis', String(content).substring(0, 1000), 0.85);
+        const node = this.nodes.get(id);
+        node.synthesizedFrom = valid;
+        if (meta.topic) node.topic = meta.topic;
+        // Cross-link every pair of source nodes and each source → synthesis.
+        for (let i = 0; i < valid.length; i++) {
+            for (let j = i + 1; j < valid.length; j++) {
+                this.addEdge(valid[i], valid[j], 'synthesis_pair', 0.7);
+            }
+            this.addEdge(valid[i], id, 'feeds_synthesis', 0.9);
+            this.addEdge(id, valid[i], 'synthesized_from', 0.9);
+        }
+        return id;
+    }
+
+    // Phase 4: nightly cross-linker — find pairs of nodes that share significant
+    // term overlap (≥3 shared significant terms) but have no edge yet, and connect
+    // them. Converts the archive into a real web.
+    buildCrossLinks(minSharedTerms = 3, maxNodes = 300) {
+        const ids = Array.from(this.nodes.keys()).slice(-maxNodes);
+        let added = 0;
+        for (let i = 0; i < ids.length; i++) {
+            const a = this.nodes.get(ids[i]);
+            for (let j = i + 1; j < ids.length; j++) {
+                const b = this.nodes.get(ids[j]);
+                if (a.connections.has(b.id) || b.connections.has(a.id)) continue;
+                const shared = this._sharedTerms(a.content, b.content);
+                if (shared >= minSharedTerms) {
+                    this.addEdge(a.id, b.id, 'crosslink', 0.4 + Math.min(0.4, shared * 0.05));
+                    added++;
+                }
+            }
+        }
+        return added;
+    }
+
+    _sharedTerms(a, b) {
+        const ta = new Set(this._extractTerms(a));
+        const tb = new Set(this._extractTerms(b));
+        let shared = 0;
+        for (const t of ta) if (tb.has(t)) shared++;
+        return shared;
+    }
+
     indexExperience(experience) {
         if (!experience || !experience.context) return;
         const contextStr = typeof experience.context === 'string' ? experience.context : JSON.stringify(experience.context);
         this.addNode('experience', `Cycle ${experience.cycle}: ${contextStr.substring(0, 300)}`, 0.5);
+    }
+    indexSeshatSoulNotes(pagesDir = 'C:\\Users\\uncom\\Desktop\\seshat-second-brain\\pages') {
+        if (!fs.existsSync(pagesDir)) return 0;
+        let count = 0;
+        try {
+            const files = fs.readdirSync(pagesDir).filter(f => f.endsWith('.md'));
+            for (const file of files) {
+                const filePath = path.join(pagesDir, file);
+                const text = fs.readFileSync(filePath, 'utf8');
+                if (text.includes('soul-note') || text.includes('#soul-note') || text.includes('type::')) {
+                    const title = file.replace('.md', '');
+                    const snippet = text.substring(0, 1000);
+                    const nodeId = this.addNode('seshat_soul_note', '[SOUL NOTE: ' + title + ']\n' + snippet, 0.9);
+                    if (this.nodes.has(nodeId)) {
+                        this.nodes.get(nodeId).topic = 'seshat_soul_note';
+                        this.nodes.get(nodeId).title = title;
+                    }
+                    count++;
+                }
+            }
+            console.log('[KnowledgeGraph] Ingested ' + count + ' Logseq Soul Notes from Seshat pages/');
+        } catch (e) {
+            console.error('[KnowledgeGraph] Seshat ingestion error:', e.message);
+        }
+        return count;
     }
 }
 

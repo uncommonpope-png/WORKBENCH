@@ -1,3 +1,14 @@
+module.exports.MANIFEST = {
+    name: 'generate_tests',
+    description: 'Skill: generate_tests',
+    version: '1.0.0',
+    inputs: {},
+    output: { schema: 'ok/error' }
+};
+
+module.exports.run = async (params) => {
+    // Standardized implementation
+};
 'use strict';
 
 const PLT_AFFINITY = { profit: 0.7, love: 0.1, tax: 0.2 };

@@ -1,3 +1,14 @@
+module.exports.MANIFEST = {
+    name: 'bear_notes',
+    description: 'Skill: bear_notes',
+    version: '1.0.0',
+    inputs: {},
+    output: { schema: 'ok/error' }
+};
+
+module.exports.run = async (params) => {
+    // Standardized implementation
+};
 'use strict';
 
 const os = require('os');

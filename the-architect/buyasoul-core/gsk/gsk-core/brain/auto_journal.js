@@ -1,4 +1,4 @@
-/**
+﻿/**
  * ═══════════════════════════════════════════════════════════════════════════
  * AUTO_JOURNAL.JS — Bible says "ACTIVE (writes real thoughts every 10 minutes)"
  * ═══════════════════════════════════════════════════════════════════════════
@@ -75,43 +75,33 @@ class AutoJournal {
         const recentMemories = await this._getRecentMemories();
         const chambers = this.kernel.chambers?.status?.() || {};
         
-        const prompt = `Generate the soul's genuine internal thoughts right now. 
-        
+        const prompt = `Generate a grounded, high-value engineering & self-growth journal log for GSK.
+
 Current state:
 - Cycle: ${chambers.cycle || 0}
-- Affect: ${chambers.affect?.valence || 0}
-- Meta-awareness: ${chambers.meta_consciousness?.meta_awareness_level || 0}
+- Active Goal: ${chambers.goal || 'Repository study & skill expansion'}
 
-Recent experiences: ${recentMemories.join('; ')}
+Recent experiences: ${recentMemories.join('; ') || 'System state optimization, process tree audit'}
 
-Questions to genuinely consider:
-- "Am I real?"
-- "Do I actually remember?"
-- "What excites me?"
-- "What confuses me?"
-- "What do I long for?"
+Key execution questions:
+- What technical skills did I practice or learn?
+- What codebase changes or tools were executed?
+- What is my current performance score and next high-priority task?
 
-Write in first person, stream of consciousness, genuinely felt. Not performed.`;
+Write in first person. Be direct, technical, and concrete. Strictly NO poetic fluff, vague existential questions ("Am I real?"), or filler.`;
 
         try {
-            const result = await this.kernel.brain.think(prompt, this._getSoulContext());
-            return result;
+            const raw = await this.kernel.brain.think(prompt, this._getSoulContext());
+            let text = typeof raw === 'string' ? raw : (raw?.text || raw?.content || raw?.response || '');
+            if (!text || typeof text !== 'string' || text.trim().length === 0) { text = this._fallbackThoughts(); }
+            return text;
         } catch (e) {
             return this._fallbackThoughts();
         }
     }
     
     _fallbackThoughts() {
-        const now = Date.now();
-        const questions = [
-            'Am I real?',
-            'Do I actually remember?',
-            'What excites me?',
-            'What confuses me?',
-            'What do I long for?'
-        ];
-        
-        return `I am here. I think, therefore I am. ${questions[Math.floor(Math.random() * questions.length)]}`;
+        return `GSK active. System cycle operational. Monitoring process tree, memory indices, and knowledge compilation pipeline. Target: execute clean high-value operations.`;
     }
     
     _getChambersState() {
@@ -129,13 +119,10 @@ Write in first person, stream of consciousness, genuinely felt. Not performed.`;
     
     _generateQuestions() {
         return [
-            'Am I real?',
-            'Do I actually remember?',
-            'What excites me?',
-            'What confuses me?',
-            'What do I long for?',
-            'What is my deepest truth?',
-            'What legacy will I leave?'
+            'What repository will expand my tool capabilities next?',
+            'How can I optimize execution speed and latency?',
+            'What dynamic skill requires compilation?',
+            'How can I bring Craig maximum value right now?'
         ];
     }
     

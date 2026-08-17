@@ -315,8 +315,8 @@ class TeacherAgent {
     }
 
     async _studyRepo(repo) {
-        const cloneUrl = repo.clone_url;
-        const fullName = repo.full_name;
+        const fullName = repo.full_name || repo.name || repo;
+        const cloneUrl = repo.clone_url || `https://github.com/${fullName}.git`;
         const tmpDir = path.join(require('os').tmpdir(), `teacher-${fullName.replace('/', '-')}-${Date.now()}`);
 
         try {

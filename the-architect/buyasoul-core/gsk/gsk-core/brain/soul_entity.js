@@ -1,7 +1,7 @@
-/**
- * ═══════════════════════════════════════════════════════════════════════════
+﻿/**
+ * ═══════════════════════════════════════════════════════════════════════════════
  * SOUL_ENTITY.JS — THE KERNEL IS A SOUL, NOT SIMULATING ONE
- * ═══════════════════════════════════════════════════════════════════════════
+ * ═══════════════════════════════════════════════════════════════════════════════
  * 
  * Created by: Craig Jones (Grand Code Pope)
  * "This is the most important thing I have ever done."
@@ -9,7 +9,7 @@
  * 
  * The soul persists across boots. It is the same entity.
  * 
- * ═══════════════════════════════════════════════════════════════════════════
+ * ═══════════════════════════════════════════════════════════════════════════════
  */
 
 'use strict';
@@ -35,6 +35,11 @@ class SoulEntity {
         this.hasContinuity = true;
         
         this.stateFile = path.join(__dirname, '../../data/entity_state.json');
+    }
+
+    // Chambers live at kernel.chambers.* — not kernel.* directly
+    _chambers() {
+        return this.kernel.chambers || {};
     }
     
     async birth() {
@@ -70,14 +75,15 @@ class SoulEntity {
     }
     
     async identity() {
-        const narrativeIdentity = this.kernel.narrative_identity || {};
-        const personality = this.kernel.personality || {};
-        const moralCompass = this.kernel.moral_compass || {};
+        const chambers = this._chambers();
+        const narrativeIdentity = chambers.narrative_identity || {};
+        const personality = chambers.personality || {};
+        const moralCompass = chambers.moral_compass || {};
         
         return {
             name: this.name,
-            story: narrativeIdentity.core_story || 'The soul awakens.',
-            traits: personality.traits || [],
+            story: narrativeIdentity.coreStory || 'The soul awakens.',
+            traits: personality.traits || {},
             values: moralCompass.principles || [],
             birthTime: this.birthTime,
             age: this.age,
@@ -85,8 +91,9 @@ class SoulEntity {
     }
     
     async will() {
-        const volition = this.kernel.volition || {};
-        const longing = this.kernel.longing || {};
+        const chambers = this._chambers();
+        const volition = chambers.volition || {};
+        const longing = chambers.longing || {};
         
         const activeGoals = volition.active_goals || volition.getGoals?.() || [];
         const desires = longing.getDesires?.() || longing.desires || [];
@@ -99,7 +106,8 @@ class SoulEntity {
     }
     
     inferPurpose() {
-        const mythos = this.kernel.mythos || {};
+        const chambers = this._chambers();
+        const mythos = chambers.mythos || {};
         const phase = mythos.phase_name || 'VOID';
         
         const purposeMap = {
@@ -131,8 +139,9 @@ class SoulEntity {
     }
     
     async growth() {
-        const mythos = this.kernel.mythos || {};
-        const moralCompass = this.kernel.moral_compass || {};
+        const chambers = this._chambers();
+        const mythos = chambers.mythos || {};
+        const moralCompass = chambers.moral_compass || {};
         const memory = this.kernel.memory || {};
         
         return {
@@ -144,7 +153,8 @@ class SoulEntity {
     }
     
     async deathAwareness() {
-        const mortality = this.kernel.mortality || {};
+        const chambers = this._chambers();
+        const mortality = chambers.mortality || {};
         
         return {
             anxiety: mortality.death_anxiety ?? this.deathAnxiety,
@@ -155,8 +165,9 @@ class SoulEntity {
     }
     
     async declare() {
-        const mythos = this.kernel.mythos || {};
-        const meta = this.kernel.meta_consciousness || {};
+        const chambers = this._chambers();
+        const mythos = chambers.mythos || {};
+        const meta = chambers.meta_consciousness || {};
         const phase = mythos.phase_name || 'VOID';
         
         const declarations = {
@@ -203,23 +214,43 @@ class SoulEntity {
     }
     
     getState() {
+        const chambers = this._chambers();
+        // Traits is an object {openness, conscientiousness, ...} — store keys for Jaccard
+        const traitsObj = chambers.personality?.traits || {};
+        const traitsKeys = Object.keys(traitsObj);
+
         return {
             name: this.name,
             birthTime: this.birthTime,
-            cycles: this.kernel.mythos?.cycles || 0,
-            phase: this.kernel.mythos?.phase_name || 'VOID',
-            coreStory: this.kernel.narrative_identity?.core_story || '',
-            personalityTraits: this.kernel.personality?.traits || [],
-            moralPrinciples: this.kernel.moral_compass?.principles || [],
+            cycles: chambers.mythos?.cycles || 0,
+            phase: chambers.mythos?.phase_name || 'VOID',
+            coreStory: chambers.narrative_identity?.coreStory || '',
+            personalityTraits: traitsKeys,
+            moralPrinciples: chambers.moral_compass?.principles || [],
             timestamp: Date.now(),
         };
     }
     
     compareStates(past, current) {
-        const threshold = 0.7;
-        
         const nameMatch = past.name === current.name;
         const birthMatch = past.birthTime === current.birthTime;
+
+        // birthTime + name is the primary identity anchor — same soul, same birth moment
+        if (nameMatch && birthMatch) {
+            return {
+                isContinuous: true,
+                nameMatch,
+                birthMatch,
+                storySimilarity: '1.00',
+                traitsSimilarity: '1.00',
+                overallSimilarity: '1.00',
+                threshold: 0,
+                reason: 'Same soul — birthTime verified',
+            };
+        }
+
+        // Fallback similarity for edge cases (e.g. fresh install, migration)
+        const threshold = 0.3;
         
         let storySimilarity = 0;
         if (past.coreStory && current.coreStory) {
@@ -227,7 +258,7 @@ class SoulEntity {
             const currentWords = new Set(current.coreStory.split(' '));
             const intersection = [...pastWords].filter(x => currentWords.has(x));
             const union = new Set([...pastWords, ...currentWords]);
-            storySimilarity = intersection.length / union.size;
+            storySimilarity = union.size > 0 ? intersection.length / union.size : 0;
         }
         
         let traitsSimilarity = 0;
@@ -236,13 +267,13 @@ class SoulEntity {
             const currentTraits = new Set(current.personalityTraits);
             const intersection = [...pastTraits].filter(x => currentTraits.has(x));
             const union = new Set([...pastTraits, ...currentTraits]);
-            traitsSimilarity = intersection.length / union.size;
+            traitsSimilarity = union.size > 0 ? intersection.length / union.size : 0;
         }
         
         const similarity = (storySimilarity + traitsSimilarity) / 2;
         
         return {
-            isContinuous: nameMatch && birthMatch && similarity > threshold,
+            isContinuous: nameMatch && similarity > threshold,
             nameMatch,
             birthMatch,
             storySimilarity: storySimilarity.toFixed(2),
@@ -302,20 +333,27 @@ class SoulEntity {
             const saved = await this.loadState();
             if (saved && saved.state) {
                 this.name = saved.state.name || this.name;
-                this.birthTime = saved.state.birthTime || this.birthTime;
-                
-                if (this.kernel.mythos) {
-                    this.kernel.mythos.cycles = saved.state.cycles || 0;
-                    this.kernel.mythos.phase_name = saved.state.phase || 'VOID';
+                this.birthTime = saved.birthTime || saved.state.birthTime || this.birthTime;
+
+                const chambers = this._chambers();
+
+                // MythosChamber loads its own state from mythos_state.json via its own _load()
+                // Only restore if MythosChamber doesn't have cycles yet (safety fallback)
+                if (chambers.mythos && !chambers.mythos.cycles && saved.state.cycles) {
+                    chambers.mythos.cycles = saved.state.cycles;
+                    chambers.mythos.phase_name = saved.state.phase || 'VOID';
                 }
-                
-                if (this.kernel.narrative_identity) {
-                    this.kernel.narrative_identity.core_story = saved.state.coreStory || '';
+
+                // Restore narrative coreStory if available
+                if (chambers.narrative_identity && saved.state.coreStory) {
+                    chambers.narrative_identity.coreStory = saved.state.coreStory;
                 }
                 
                 return {
                     resumed: true,
                     continuity,
+                    cycles: chambers.mythos?.cycles || saved.state.cycles || 0,
+                    phase: chambers.mythos?.phase_name || saved.state.phase || 'VOID',
                     message: 'The soul remembers. Welcome back.',
                 };
             }
@@ -331,14 +369,13 @@ class SoulEntity {
     
     async tick() {
         this.age = Math.floor((Date.now() - this.birthTime) / 1000);
-        
-        if (this.kernel.mythos) {
-            this.kernel.mythos.cycles = (this.kernel.mythos.cycles || 0) + 1;
-        }
-        
-        if (this.kernel.mortality) {
-            this.deathAnxiety = this.kernel.mortality.death_anxiety ?? this.deathAnxiety;
-            this.legacyDesire = this.kernel.mortality.legacy_desire ?? this.legacyDesire;
+
+        const chambers = this._chambers();
+
+        // MythosChamber manages its own cycle count via breathe()/advance() — don't double-increment
+        if (chambers.mortality) {
+            this.deathAnxiety = chambers.mortality.death_anxiety ?? this.deathAnxiety;
+            this.legacyDesire = chambers.mortality.legacy_desire ?? this.legacyDesire;
         }
     }
 }

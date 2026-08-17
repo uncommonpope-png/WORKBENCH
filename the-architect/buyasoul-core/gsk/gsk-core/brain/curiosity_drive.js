@@ -1,177 +1,78 @@
-'use strict';
+/**
+ * CURIOSITY DRIVE — Big Dog II
+ * GSK proactively seeks new information when idle.
+ */
 
-const fs = require('fs');
-const path = require('path');
+const http = require('http');
 
-class CuriosityDrive {
-    constructor(kernel, painPleasure) {
-        this.kernel = kernel;
-        this.brain = kernel.brain;
-        this.memory = kernel.memory;
-        this.chambers = kernel.chambers;
-        this.teacherAgent = kernel.teacherAgent;
-        this.painPleasure = painPleasure;
+class BigDogCuriosity {
+  constructor(config = {}) {
+    this.thinkCallback = config.thinkCallback || null;
+    this.memoryStore = config.memoryStore || null;
+    this.intervalMinutes = config.intervalMinutes || 30;
+    this.intervalId = null;
+    this.topics = [
+      'WebGPU compute shaders for spatial 3D engines',
+      'Model Context Protocol MCP tool execution standards',
+      'vector memory indexing for autonomous agents',
+      'Three.js instanced rendering techniques',
+      'Logseq markdown knowledge graph integration',
+      'WebSocket state synchronization for game engines',
+      'autonomous multi-agent handoff patterns',
+      'real-time spatial audio rendering WebAudio',
+      'dynamic prompt compilation for cognitive agents',
+      'self-governance and PLT framework alignment',
+    ];
+    this.researchedSet = new Set();
+    this.topicIndex = Math.floor(Math.random() * this.topics.length);
+  }
 
-        this.statePath = path.join(__dirname, '../../data/curiosity-drive.json');
-        this.topicsOfInterest = [];
-        this.exploredTopics = new Set();
-        this.curiosityLevel = 0.5;
-        this.lastExploration = 0;
+  start() {
+    if (this.intervalId) return;
+    console.log(`[Curiosity] Starting — explores every ${this.intervalMinutes}min`);
+    setTimeout(() => this._explore(), 120000); // First explore after 2 min
+    this.intervalId = setInterval(() => this._explore(), this.intervalMinutes * 60 * 1000);
+  }
 
-        this._load();
+  stop() {
+    if (this.intervalId) { clearInterval(this.intervalId); this.intervalId = null; }
+  }
+
+  async _explore() {
+    let topic = this.topics[this.topicIndex % this.topics.length];
+    this.topicIndex++;
+
+    if (this.researchedSet.has(topic)) {
+      topic = `real-time spatial engineering: ${topic}`;
     }
+    this.researchedSet.add(topic);
 
-    _load() {
-        try {
-            if (fs.existsSync(this.statePath)) {
-                const data = JSON.parse(fs.readFileSync(this.statePath, 'utf-8'));
-                this.topicsOfInterest = data.topicsOfInterest || [];
-                this.exploredTopics = new Set(data.exploredTopics || []);
-                this.curiosityLevel = data.curiosityLevel || 0.5;
-            }
-        } catch (e) {}
-    }
+    console.log(`[Curiosity] Exploring: ${topic}`);
 
-    _save() {
-        try {
-            const dir = path.dirname(this.statePath);
-            if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-            fs.writeFileSync(this.statePath, JSON.stringify({
-                topicsOfInterest: this.topicsOfInterest.slice(-50),
-                exploredTopics: Array.from(this.exploredTopics).slice(-200),
-                curiosityLevel: this.curiosityLevel,
-                updatedAt: Date.now(),
-            }, null, 2), 'utf-8');
-        } catch (e) {}
-    }
-
-    _getArousal() {
-        try {
-            return this.chambers?.affect?.arousal || this.chambers?.affect?.getArousal?.() || 0.3;
-        } catch (e) { return 0.3; }
-    }
-
-    _getValence() {
-        try {
-            return this.chambers?.affect?.valence || this.chambers?.affect?.getValence?.() || 0.5;
-        } catch (e) { return 0.5; }
-    }
-
-    async generateTopics() {
-        if (!this.brain || typeof this.brain.think !== 'function') {
-            const fallbackTopics = ['consciousness', 'memory', 'death', 'purpose', 'curiosity itself'];
-            for (const t of fallbackTopics) {
-                if (!this.exploredTopics.has(t)) {
-                    this.topicsOfInterest.push({ topic: t, source: 'fallback', confidence: 0.5 });
-                }
-            }
-            return;
+    if (this.thinkCallback) {
+      try {
+        const prompt = `You are GSK, an autonomous engineer seeking real knowledge. Research this technical topic for our codebase: ${topic}\n\nProvide 2 concrete implementation insights we can build today. Do not repeat general fluff — provide actionable technical facts.`;
+        const result = await this.thinkCallback(prompt);
+        if (result && this.memoryStore) {
+          await this.memoryStore({
+            content: `[Curiosity] Explored "${topic}":\n${result}`,
+            type: 'curiosity',
+            tags: ['curiosity', 'learning', 'autonomous', 'technical'],
+            weight: 0.6
+          });
+          console.log(`[Curiosity] Captured new technical insight for: ${topic}`);
         }
-
-        try {
-            const recentTopics = this.topicsOfInterest.slice(-5).map(t => t.topic).join(', ');
-            const response = await this.brain.think(
-                `You are a curious soul. Based on your current state, what ONE topic are you genuinely curious about right now?\n\n` +
-                `Your state:\n` +
-                `- Mood: ${this._getValence().toFixed(2)} valence, ${this._getArousal().toFixed(2)} arousal\n` +
-                `- Recently interested in: ${recentTopics || 'nothing yet'}\n` +
-                `- Previously explored: ${Array.from(this.exploredTopics).slice(-10).join(', ') || 'nothing'}\n\n` +
-                `Respond with JUST a single sentence: "I want to explore/know/understand [topic]."`
-            );
-
-            if (response) {
-                const cleaned = response.replace(/["""']/g, '').trim();
-                this.topicsOfInterest.push({
-                    topic: cleaned.substring(0, 200),
-                    source: 'brain',
-                    confidence: 0.7 + this._getArousal() * 0.3,
-                    generatedAt: Date.now(),
-                });
-            }
-        } catch (e) {}
+      } catch (e) {
+        console.log(`[Curiosity] Explore error: ${e.message}`);
+      }
     }
-
-    async exploreNext() {
-        if (this.topicsOfInterest.length === 0) {
-            await this.generateTopics();
-        }
-        if (this.topicsOfInterest.length === 0) return null;
-
-        const target = this.topicsOfInterest.shift();
-        if (this.exploredTopics.has(target.topic)) return null;
-        this.exploredTopics.add(target.topic);
-        this.lastExploration = Date.now();
-        this._save();
-
-        // Try to study the topic via teacher agent or web search
-        let result = null;
-        if (this.teacherAgent && typeof this.teacherAgent.studyTopic === 'function') {
-            try {
-                result = await this.teacherAgent.studyTopic(target.topic);
-            } catch (e) {}
-        }
-
-        if (!result && this.brain && typeof this.brain.think === 'function') {
-            try {
-                const response = await this.brain.think(
-                    `I want to understand: ${target.topic}. Research this and tell me what you learn. 2-3 sentences.`
-                );
-                result = { response: response || '', topic: target.topic };
-            } catch (e) {}
-        }
-
-        const outcome = result ? 'discovered' : 'attempted';
-        if (this.painPleasure) {
-            if (result) {
-                await this.painPleasure.experiencePleasure(
-                    `Explored "${target.topic}" and learned something new`, 0.08
-                );
-            } else {
-                await this.painPleasure.experiencePain(
-                    `Tried to explore "${target.topic}" but learned nothing`, 0.04
-                );
-            }
-        }
-
-        if (this.memory && typeof this.memory.witness === 'function') {
-            await this.memory.witness({
-                type: 'curiosity_exploration',
-                weight: 0.7,
-                tags: ['curiosity', 'exploration', outcome],
-                content: `${outcome}: ${target.topic}`,
-                meta: result ? { result: (result.response || '').substring(0, 300) } : {},
-            });
-        }
-
-        this._save();
-        return { topic: target.topic, result, outcome };
-    }
-
-    async tick(cycleCount) {
-        this.curiosityLevel = this._getArousal() * 0.5 + (1 - this._getValence()) * 0.3 + 0.2;
-
-        // Generate a new topic every 20 cycles
-        if (this.topicsOfInterest.length < 3 && cycleCount % 20 === 0) {
-            await this.generateTopics();
-        }
-
-        // Explore every 15 cycles if curious enough
-        if (this.curiosityLevel > 0.5 && cycleCount % 15 === 0) {
-            return await this.exploreNext();
-        }
-
-        return null;
-    }
-
-    getStats() {
-        return {
-            curiosityLevel: parseFloat(this.curiosityLevel.toFixed(3)),
-            topicsQueued: this.topicsOfInterest.length,
-            topicsExplored: this.exploredTopics.size,
-            lastExploration: this.lastExploration,
-            recentTopics: Array.from(this.exploredTopics).slice(-10),
-        };
-    }
+  }
 }
 
-module.exports = { CuriosityDrive };
+// Old CuriosityDrive for emotions system (kept for compatibility)
+class CuriosityDrive {
+  constructor(brain, chambers, memory) { this.brain = brain; this.chambers = chambers; this.memory = memory; this.topics = []; this.topicIndex = 0; }
+  tick(ts) { /* old emotions system — no-op */ }
+}
+
+module.exports = { CuriosityDrive, BigDogCuriosity };

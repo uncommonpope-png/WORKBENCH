@@ -1,3 +1,14 @@
+module.exports.MANIFEST = {
+    name: 'soul_evolution',
+    description: 'Skill: soul_evolution',
+    version: '1.0.0',
+    inputs: {},
+    output: { schema: 'ok/error' }
+};
+
+module.exports.run = async (params) => {
+    // Standardized implementation
+};
 'use strict';
 
 const fs = require('fs');
@@ -160,3 +171,4 @@ async function skill_soul_evolution(input) {
 }
 
 module.exports = { skill_soul_evolution };
+

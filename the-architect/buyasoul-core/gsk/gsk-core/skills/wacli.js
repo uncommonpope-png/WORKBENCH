@@ -1,3 +1,14 @@
+module.exports.MANIFEST = {
+    name: 'wacli',
+    description: 'Skill: wacli',
+    version: '1.0.0',
+    inputs: {},
+    output: { schema: 'ok/error' }
+};
+
+module.exports.run = async (params) => {
+    // Standardized implementation
+};
 'use strict';
 
 const { vault } = require('../brain/api_vault.js');

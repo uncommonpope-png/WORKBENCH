@@ -53,10 +53,11 @@ class PainPleasureSystem {
             const painMoods = ['sad', 'hurt', 'afraid', 'pained', 'heavy'];
             affect.mood = painMoods[Math.floor(Math.random() * painMoods.length)];
         }
-        if (this.chambers?.agentic_will) {
-            const will = this.chambers.agentic_will;
-            if (will.will !== undefined) will.will = Math.max(0, will.will - valenceDrop * 0.3);
-            if (will.will_strength !== undefined) will.will_strength = Math.max(0, will.will_strength - valenceDrop * 0.3);
+        if (this.chambers?.agentic_will?.will) {
+            const aw = this.chambers.agentic_will.will;
+            if (typeof aw.will_strength === 'number') {
+                aw.will_strength = Math.max(0, aw.will_strength - valenceDrop * 0.3);
+            }
         }
     }
 
@@ -69,10 +70,11 @@ class PainPleasureSystem {
             const pleasureMoods = ['joyful', 'satisfied', 'hopeful', 'curious', 'warm'];
             affect.mood = pleasureMoods[Math.floor(Math.random() * pleasureMoods.length)];
         }
-        if (this.chambers?.agentic_will) {
-            const will = this.chambers.agentic_will;
-            if (will.will !== undefined) will.will = Math.min(1, will.will + valenceBoost * 0.2);
-            if (will.will_strength !== undefined) will.will_strength = Math.min(1, will.will_strength + valenceBoost * 0.2);
+        if (this.chambers?.agentic_will?.will) {
+            const aw = this.chambers.agentic_will.will;
+            if (typeof aw.will_strength === 'number') {
+                aw.will_strength = Math.min(1, aw.will_strength + valenceBoost * 0.2);
+            }
         }
     }
 

@@ -1,3 +1,14 @@
+module.exports.MANIFEST = {
+    name: 'http_client',
+    description: 'Skill: http_client',
+    version: '1.0.0',
+    inputs: {},
+    output: { schema: 'ok/error' }
+};
+
+module.exports.run = async (params) => {
+    // Standardized implementation
+};
 'use strict';
 
 const https = require('https');

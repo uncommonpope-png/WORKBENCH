@@ -1,3 +1,14 @@
+module.exports.MANIFEST = {
+    name: 'remote_desktop_controller',
+    description: 'Skill: remote_desktop_controller',
+    version: '1.0.0',
+    inputs: {},
+    output: { schema: 'ok/error' }
+};
+
+module.exports.run = async (params) => {
+    // Standardized implementation
+};
 'use strict';
 
 const { spawn } = require('child_process');
@@ -290,3 +301,4 @@ exports.skill_remote_desktop_controller = async function(brain, memory, input) {
 };
 
 exports.PLT_AFFINITY = { profit: 0.5, love: 0.3, tax: 0.2 };
+

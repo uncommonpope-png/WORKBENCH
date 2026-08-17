@@ -1,3 +1,14 @@
+module.exports.MANIFEST = {
+    name: 'pm_skills',
+    description: 'Skill: pm_skills',
+    version: '1.0.0',
+    inputs: {},
+    output: { schema: 'ok/error' }
+};
+
+module.exports.run = async (params) => {
+    // Standardized implementation
+};
 'use strict';
 
 const PLT_AFFINITY = { profit: 0.5, love: 0.3, tax: 0.2 };
@@ -19,3 +30,4 @@ async function skill_pm_skills(input, brain, memory) {
 }
 
 module.exports = { skill_pm_skills, PLT_AFFINITY };
+

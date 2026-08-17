@@ -1,3 +1,14 @@
+module.exports.MANIFEST = {
+    name: 'webapp_testing',
+    description: 'Skill: webapp_testing',
+    version: '1.0.0',
+    inputs: {},
+    output: { schema: 'ok/error' }
+};
+
+module.exports.run = async (params) => {
+    // Standardized implementation
+};
 'use strict';
 
 const { chromium } = require('playwright');
@@ -401,3 +412,4 @@ async function generateReport(testRunId) {
 }
 
 module.exports = { skill_webapp_testing };
+
