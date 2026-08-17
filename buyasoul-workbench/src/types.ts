@@ -18,7 +18,7 @@ export interface AgentProfile {
 }
 
 export interface ProviderConfig {
-  provider: "gemini" | "openai" | "anthropic" | "ollama" | "custom";
+  provider: "gemini" | "openai" | "anthropic" | "ollama" | "custom" | "gsk";
   model: string;
   apiKey: string;
   baseUrl: string;
