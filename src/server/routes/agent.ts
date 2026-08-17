@@ -1,10 +1,14 @@
 import { Hono } from "hono";
 import fs from "fs";
 import path from "path";
+import http from "http";
 import { OmniRouterService } from "../../services/OmniRouterService";
 
 export const agentRouter = new Hono();
 const routerService = new OmniRouterService();
+
+const GSK_MCP_URL = process.env.GSK_MCP_URL || "http://127.0.0.1:3001";
+const GSK_MCP_KEY = process.env.MCP_API_KEY || "gsk-dev-key";
 
 // Define Allie Brain directory for persistent Phase state management
 const ALLIE_DIR = path.join(process.cwd(), ".allie-brain");
@@ -18,6 +22,114 @@ const ensureAllieBrainDir = () => {
     fs.mkdirSync(ALLIE_DIR, { recursive: true });
   }
 };
+
+// ========================== GSK MCP PROXY ==========================
+function gskMCPRequest(endpoint: string, body: any = {}, timeoutMs = 30000): Promise<any> {
+  return new Promise((resolve, reject) => {
+    const data = JSON.stringify(body);
+    const urlObj = new URL(`${GSK_MCP_URL}${endpoint}`);
+    const req = http.request({
+      hostname: urlObj.hostname,
+      port: urlObj.port,
+      path: urlObj.pathname,
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-api-key": GSK_MCP_KEY,
+        "Content-Length": Buffer.byteLength(data)
+      },
+      timeout: timeoutMs
+    }, (res) => {
+      let buf = "";
+      res.on("data", (c) => buf += c);
+      res.on("end", () => {
+        try { resolve(JSON.parse(buf)); }
+        catch { resolve({ raw: buf }); }
+      });
+    });
+    req.on("error", (err) => reject(err));
+    req.on("timeout", () => { req.destroy(); reject(new Error("GSK MCP timeout")); });
+    req.write(data);
+    req.end();
+  });
+}
+
+// GET /gsk/status — Real GSK status from MCP :3001
+agentRouter.get("/gsk/status", async (c) => {
+  try {
+    const status = await gskMCPRequest("/mcp/status", {});
+    return c.json({ success: true, ...status.result }, 200);
+  } catch (err: any) {
+    return c.json({ success: false, error: `GSK not available: ${err.message}`, gsk_connected: false }, 503);
+  }
+});
+
+// GET /gsk/health — Real GSK health from MCP :3001
+agentRouter.get("/gsk/health", async (c) => {
+  try {
+    const res = await fetch(`${GSK_MCP_URL}/mcp/health`);
+    const data = await res.json();
+    return c.json({ success: true, ...data }, 200);
+  } catch (err: any) {
+    return c.json({ success: false, error: `GSK not available: ${err.message}`, gsk_connected: false }, 503);
+  }
+});
+
+// POST /gsk/chat — Real GSK chat through MCP :3001
+agentRouter.post("/gsk/chat", async (c) => {
+  try {
+    const body = await c.req.json();
+    const message = body.message || body.prompt || "";
+    if (!message) return c.json({ success: false, error: "Missing message" }, 400);
+
+    const response = await gskMCPRequest("/mcp/chat", { message }, 60000);
+    return c.json({ success: true, ...response.result || response }, 200);
+  } catch (err: any) {
+    return c.json({ success: false, error: `GSK chat failed: ${err.message}` }, 500);
+  }
+});
+
+// POST /gsk/think — Real GSK brain.think through MCP :3001
+agentRouter.post("/gsk/think", async (c) => {
+  try {
+    const body = await c.req.json();
+    const prompt = body.prompt || body.message || "";
+    if (!prompt) return c.json({ success: false, error: "Missing prompt" }, 400);
+
+    const response = await gskMCPRequest("/mcp/execute", {
+      tool: "brain.think",
+      args: { prompt, context: body.context || "" }
+    }, 60000);
+    return c.json({ success: true, ...response.result || response }, 200);
+  } catch (err: any) {
+    return c.json({ success: false, error: `GSK think failed: ${err.message}` }, 500);
+  }
+});
+
+// POST /gsk/consciousness/gate — Toggle PLT scoring on/off
+agentRouter.post("/gsk/consciousness/gate", async (c) => {
+  try {
+    const body = await c.req.json();
+    const enabled = body.enabled !== false;
+
+    const response = await gskMCPRequest("/mcp/execute", {
+      tool: "chambers.status",
+      args: {}
+    }, 10000);
+
+    return c.json({
+      success: true,
+      consciousness_gate: enabled,
+      plt_scoring: enabled,
+      message: enabled
+        ? "Consciousness gate OPEN. System 1/System 2 active. PLT scoring enabled. 34 Chambers engaged."
+        : "Consciousness gate CLOSED. Deterministic mode. PLT scoring disabled. Agent runs on templates only.",
+      chambers: response.result || null
+    }, 200);
+  } catch (err: any) {
+    return c.json({ success: false, error: `Consciousness gate toggle failed: ${err.message}` }, 500);
+  }
+});
 
 // ========================== PHASE 0.1 & ROUTING ENDPOINTS ==========================
 

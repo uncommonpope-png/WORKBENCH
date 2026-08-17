@@ -256,16 +256,36 @@ export class OmniRouterService {
       }
 
       try {
-        if (route.provider === "nvidia" && Math.random() < 0.25) {
-          throw new Error("Nvidia GPU node over capacity - 503 service unavailable.");
+        const routerUrl = process.env.NINE_ROUTER_URL || "http://127.0.0.1:20128";
+        const apiKey = process.env.NINE_ROUTER_API_KEY || "test";
+        const maxTokens = 2048;
+
+        const response = await fetch(`${routerUrl}/v1/chat/completions`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${apiKey}`
+          },
+          body: JSON.stringify({
+            model: route.model,
+            messages: [{ role: "user", content: message }],
+            max_tokens: maxTokens,
+            temperature: 0.7
+          }),
+          signal: AbortSignal.timeout(30000)
+        });
+
+        if (!response.ok) {
+          throw new Error(`OmniRoute returned ${response.status}: ${response.statusText}`);
         }
 
-        textResponse = `[OmniRouter Response from ${route.provider.toUpperCase()} (${route.model})] I am LedgerScout, operating under the PLT framework. Your request was: "${message}"`;
+        const data = await response.json() as any;
+        textResponse = data.choices?.[0]?.message?.content || "[No response content]";
 
         finalProvider = route.provider;
-        finalModel = route.model;
+        finalModel = data.model || route.model;
 
-        const mockTokens = Math.floor(100 + Math.random() * 400);
+        const mockTokens = data.usage?.total_tokens || Math.floor(100 + Math.random() * 400);
         finalCost = (mockTokens / 1000) * route.cost_per_1k;
 
         stats.total_calls++;

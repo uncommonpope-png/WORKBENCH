@@ -329,7 +329,13 @@ class MCPServer {
                 const thinkFn = typeof this.brain.thinkForUser === 'function'
                     ? this.brain.thinkForUser.bind(this.brain)
                     : (m, c) => this.brain.think(m, c, true);
-                response = await thinkFn(message, soulCtx);
+                
+                // Timeout guard — don't block MCP for more than 45s
+                const chatTimeout = 45000;
+                response = await Promise.race([
+                    thinkFn(message, soulCtx),
+                    new Promise((_, reject) => setTimeout(() => reject(new Error('Brain think timeout (45s)')), chatTimeout))
+                ]);
                 if (!response) {
                     // Retry up to 2 times with short delay
                     for (let retry = 0; retry < 2 && !response; retry++) {
@@ -1339,7 +1345,7 @@ class MCPServer {
         if (action === 'think') {
             const soulCtx = params.context || (this.chambers ? this.chambers.getSoulContext() : '');
             const response = await this.brain.think(params.prompt, soulCtx);
-            return { response, model: this.brain.model || 'unknown' };
+            return { response, model: this.brain._model || this.brain.userBrain?._model || process.env.GSK_MODEL || 'unknown' };
         }
 
         if (action === 'think_smart') {
@@ -1347,10 +1353,10 @@ class MCPServer {
             // Fallback: if brain has thinkSmart, use it; otherwise fall through to think
             if (typeof this.brain.thinkSmart === 'function') {
                 const response = await this.brain.thinkSmart(params.prompt, soulCtx);
-                return { response, model: this.brain.model || 'unknown' };
+            return { response, model: this.brain._model || this.brain.userBrain?._model || process.env.GSK_MODEL || 'unknown' };
             }
             const response = await this.brain.think(params.prompt, soulCtx);
-            return { response, model: this.brain.model || 'unknown', note: 'think_smart not available, fell back to think' };
+            return { response, model: this.brain._model || this.brain.userBrain?._model || process.env.GSK_MODEL || 'unknown', note: 'think_smart not available, fell back to think' };
         }
 
         throw new Error(`Unknown brain action: ${action}`);
@@ -1890,7 +1896,7 @@ class MCPServer {
                 groq: this.brain._groq_available || false,
                 gemini: this.brain._gemini_available || false,
                 local: this.brain._local_available || false,
-                model: this.brain.model || 'unknown',
+                model: this.brain.model || this.brain._model || this.brain.userBrain?._model || process.env.GSK_MODEL || 'unknown',
             };
         } else {
             status.systems.brain = { available: false };
@@ -2062,7 +2068,7 @@ class MCPServer {
                     groq: this.brain ? this.brain._groq_available : false,
                     gemini: this.brain ? this.brain._gemini_available : false,
                     local: this.brain ? this.brain._local_available : false,
-                    model: this.brain ? this.brain.model : 'unknown',
+                    model: this.brain ? (this.brain._model || this.brain.userBrain?._model || process.env.GSK_MODEL || 'unknown') : 'unknown',
                 };
 
             case 'memory':
