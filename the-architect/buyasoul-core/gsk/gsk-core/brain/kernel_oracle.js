@@ -34,6 +34,10 @@ class KernelOracle {
 
         this._startTime = Date.now();
         this._cycleCount = 0;
+        this._consciousnessGateEnabled = true; // Default: consciousness ON
+
+        // SSE listeners for real-time event streaming
+        this._sseListeners = null;
 
         // =====================================================================
         // THE WEAVE — Event stream
@@ -743,6 +747,89 @@ class KernelOracle {
             }
         }
         return `[oracle] Brain not available. Use /help for commands I can execute directly.`;
+    }
+
+    setConsciousnessGate(enabled) {
+        this._consciousnessGateEnabled = enabled;
+        this.notify('oracle', 'consciousness_gate', { enabled });
+    }
+
+    getConsciousnessGate() {
+        return this._consciousnessGateEnabled ?? true;
+    }
+
+    /**
+     * Subscribe to Weave events for SSE
+     * @param {Function} listener - callback(event) { source, type, data, timestamp, cycle }
+     * @returns {Function} unsubscribe function
+     */
+    subscribe(listener) {
+        if (!this._sseListeners) {
+            this._sseListeners = new Set();
+        }
+        this._sseListeners.add(listener);
+        
+        // Return unsubscribe function
+        return () => {
+            this._sseListeners?.delete(listener);
+        };
+    }
+
+    /**
+     * Notify all SSE listeners
+     */
+    _notifySSEListeners(event) {
+        if (this._sseListeners) {
+            for (const listener of this._sseListeners) {
+                try {
+                    listener(event);
+                } catch (e) {
+                    console.error('[Oracle] SSE listener error:', e.message);
+                }
+            }
+        }
+    }
+
+    // Hook into notify to also forward to SSE listeners
+    notify(source, type, data = {}) {
+        const event = {
+            source, type, data,
+            timestamp: Date.now(),
+            cycle: this._cycleCount
+        };
+
+        // Push to queue (circular buffer)
+        this._eventQueue.push(event);
+        if (this._eventQueue.length > this._maxQueueSize) {
+            this._eventQueue.shift();
+        }
+
+        // Notify SSE listeners
+        this._notifySSEListeners(event);
+        
+        // Broadcast important/notable/major events immediately to dashboard
+        const meta = this._eventMeta[source] || { emoji: '📌', severity: 'info' };
+        if (meta.severity === 'important' || meta.severity === 'notable' || meta.severity === 'major') {
+            const broadcastMsg = this._formatBroadcast(event, meta);
+            if (this._wsBridge && this._wsBridge.broadcast) {
+                this._wsBridge.broadcast({
+                    type: 'weave_event',
+                    payload: broadcastMsg
+                });
+            }
+        }
+
+        // For major events, also broadcast as a chat-like notification
+        if (meta.severity === 'major' && this._wsBridge && this._wsBridge.broadcast) {
+            this._wsBridge.broadcast({
+                type: 'weave_alert',
+                payload: {
+                    text: broadcastMsg || this._formatEventText(event, meta),
+                    source,
+                    severity: meta.severity
+                }
+            });
+        }
     }
 }
 

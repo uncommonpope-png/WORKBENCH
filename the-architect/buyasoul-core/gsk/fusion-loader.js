@@ -369,6 +369,27 @@ class GSKFusion {
                 console.log('  [FUSION] ✓ Perpetual consciousness active');
             });
 
+            this._safeInitAsync('websocketBridge', async () => {
+                const { WebSocketBridge } = require('./gsk-core/brain/websocket_bridge.js');
+                this.websocketBridge = new WebSocketBridge(this.systems, { port: 8080 });
+                this.systems.websocketBridge = this.websocketBridge;
+                await this.websocketBridge.start();
+                console.log('  [FUSION] ✓ WebSocket Bridge active on port 8080');
+            });
+
+            this._safeInit('kernelOracle', () => {
+                const { KernelOracle } = require('./gsk-core/brain/kernel_oracle.js');
+                this.kernelOracle = new KernelOracle(this.systems);
+                this.systems.kernelOracle = this.kernelOracle;
+                // Set the WebSocket bridge for the oracle
+                if (this.websocketBridge) {
+                    this.kernelOracle.setBridge(this.websocketBridge);
+                    // Also link the kernelOracle to the websocketBridge
+                    this.websocketBridge.linkSystems(this.systems);
+                }
+                console.log('  [FUSION] ✓ Kernel Oracle active');
+            });
+
             this._safeInit('awakening', () => {
                 const { Awakening } = require('./gsk-core/brain/awakening.js');
                 this.consciousness.awakening = new Awakening(kernelCtx);
@@ -627,6 +648,12 @@ class GSKFusion {
                 this.systems.subagentSpawner = this.agents.spawner;
             });
 
+            this._safeInit('autonomousAgentSpawner', () => {
+                const { AutonomousAgentSpawner } = require('./gsk-core/brain/autonomous_agent_spawner.js');
+                this.systems.autonomousAgentSpawner = new AutonomousAgentSpawner(kernelCtx);
+                console.log('  [FUSION] ✓ AutonomousAgentSpawner active');
+            });
+
             console.log('  [FUSION] ✓ Agent systems active');
 
             if (this.agents.autonomousLearning && typeof this.agents.autonomousLearning.continuousLearn === 'function') {
@@ -688,7 +715,10 @@ class GSKFusion {
                     toolBridge: this.toolBridge,
                     fusion: this,
                     soulEntity: this.soulEntity,
-                    perpetualConsciousness: this.perpetualConsciousness,
+                    perpetualConsciousness: this.systems.perpetualConsciousness,
+                    kernelOracle: this.systems.kernelOracle,
+                    autonomousAgentSpawner: this.systems.autonomousAgentSpawner,
+                    identityLock: this.systems.identityLock,
                 }, { port: 3001, apiKey: process.env.MCP_API_KEY || 'gsk-dev-key' }); // MCP key from env; fallback for local-only dev
                 if (mcpServer) {
                     this.systems.mcpServer = mcpServer;
