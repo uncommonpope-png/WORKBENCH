@@ -688,6 +688,7 @@ class GSKFusion {
                     toolBridge: this.toolBridge,
                     fusion: this,
                     soulEntity: this.soulEntity,
+                    perpetualConsciousness: this.perpetualConsciousness,
                 }, { port: 3001, apiKey: process.env.MCP_API_KEY || 'gsk-dev-key' }); // MCP key from env; fallback for local-only dev
                 if (mcpServer) {
                     this.systems.mcpServer = mcpServer;
