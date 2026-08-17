@@ -14,6 +14,10 @@ import { SoulMarketplace } from "./components/SoulMarketplace";
 import { TransactionsTab } from "./components/TransactionsTab";
 import { SolanaWalletAdapter } from "./components/SolanaWalletAdapter";
 import { CoreCapabilities } from "./components/CoreCapabilities";
+import { ProfitPrimeTab } from "./components/ProfitPrimeTab";
+import { RolesTab } from "./components/RolesTab";
+import { JournalTab } from "./components/JournalTab";
+import { CombosTab } from "./components/CombosTab";
 import { 
   Plus, 
   Check, 
@@ -36,7 +40,15 @@ import {
   Users,
   ShoppingBag,
   History,
-  Layers
+  Layers,
+  BookOpen,
+  Pyramid,
+  ScrollText,
+  Zap as ZapIcon,
+  Target,
+  Sparkles,
+  Crown,
+  Gem
 } from "lucide-react";
 
 export default function App() {
@@ -59,7 +71,7 @@ export default function App() {
   });
 
   const [skills, setSkills] = useState<Skill[]>(INITIAL_SKILLS);
-  const [activeTab, setActiveTab] = useState<"capabilities" | "profile" | "skills" | "simulation" | "integrations" | "realism" | "vault" | "habitat" | "marketplace" | "transactions">("capabilities");
+  const [activeTab, setActiveTab] = useState<"capabilities" | "profile" | "skills" | "simulation" | "integrations" | "realism" | "vault" | "habitat" | "marketplace" | "transactions" | "profitPrime" | "roles" | "journal" | "combos">("capabilities");
   const [strictRealismMode, setStrictRealismMode] = useState<boolean>(false);
   const [isExportModalOpen, setIsExportModalOpen] = useState<boolean>(false);
   const [copiedConfig, setCopiedConfig] = useState<boolean>(false);
@@ -436,6 +448,74 @@ export default function App() {
           </button>
         </div>
 
+        <div className="flex flex-wrap gap-2.5">
+          
+          <button
+            onClick={() => setActiveTab("profitPrime")}
+            className={`flex items-center gap-2 px-4 py-2 border rounded-xl text-xs font-mono tracking-wider uppercase transition-all duration-300 whitespace-nowrap cursor-pointer hover:scale-[1.03] active:scale-95 ${
+              activeTab === "profitPrime"
+                ? "bg-slate-950 text-white font-bold border-slate-650"
+                : "border-transparent text-slate-400 hover:text-slate-200 hover:bg-slate-800/30"
+            }`}
+            style={{
+              borderColor: activeTab === "profitPrime" ? profile.avatarColor : undefined,
+              boxShadow: activeTab === "profitPrime" ? `0 0 16px ${profile.avatarColor}25, inset 0 0 8px ${profile.avatarColor}10` : undefined,
+            }}
+          >
+            <Pyramid className="w-4 h-4" style={{ color: profile.avatarColor }} />
+            Profit Prime
+          </button>
+
+          <button
+            onClick={() => setActiveTab("roles")}
+            className={`flex items-center gap-2 px-4 py-2 border rounded-xl text-xs font-mono tracking-wider uppercase transition-all duration-300 whitespace-nowrap cursor-pointer hover:scale-[1.03] active:scale-95 ${
+              activeTab === "roles"
+                ? "bg-slate-950 text-white font-bold border-slate-650"
+                : "border-transparent text-slate-400 hover:text-slate-200 hover:bg-slate-800/30"
+            }`}
+            style={{
+              borderColor: activeTab === "roles" ? profile.avatarColor : undefined,
+              boxShadow: activeTab === "roles" ? `0 0 16px ${profile.avatarColor}25, inset 0 0 8px ${profile.avatarColor}10` : undefined,
+            }}
+          >
+            <Crown className="w-4 h-4" style={{ color: profile.avatarColor }} />
+            22 Roles
+          </button>
+
+          <button
+            onClick={() => setActiveTab("journal")}
+            className={`flex items-center gap-2 px-4 py-2 border rounded-xl text-xs font-mono tracking-wider uppercase transition-all duration-300 whitespace-nowrap cursor-pointer hover:scale-[1.03] active:scale-95 ${
+              activeTab === "journal"
+                ? "bg-slate-950 text-white font-bold border-slate-650"
+                : "border-transparent text-slate-400 hover:text-slate-200 hover:bg-slate-800/30"
+            }`}
+            style={{
+              borderColor: activeTab === "journal" ? profile.avatarColor : undefined,
+              boxShadow: activeTab === "journal" ? `0 0 16px ${profile.avatarColor}25, inset 0 0 8px ${profile.avatarColor}10` : undefined,
+            }}
+          >
+            <ScrollText className="w-4 h-4" style={{ color: profile.avatarColor }} />
+            Journal
+          </button>
+
+          <button
+            onClick={() => setActiveTab("combos")}
+            className={`flex items-center gap-2 px-4 py-2 border rounded-xl text-xs font-mono tracking-wider uppercase transition-all duration-300 whitespace-nowrap cursor-pointer hover:scale-[1.03] active:scale-95 ${
+              activeTab === "combos"
+                ? "bg-slate-950 text-white font-bold border-slate-650"
+                : "border-transparent text-slate-400 hover:text-slate-200 hover:bg-slate-800/30"
+            }`}
+            style={{
+              borderColor: activeTab === "combos" ? profile.avatarColor : undefined,
+              boxShadow: activeTab === "combos" ? `0 0 16px ${profile.avatarColor}25, inset 0 0 8px ${profile.avatarColor}10` : undefined,
+            }}
+          >
+            <Gem className="w-4 h-4" style={{ color: profile.avatarColor }} />
+            Combos
+          </button>
+
+        </div>
+
         <div>
           <button
             onClick={() => setIsExportModalOpen(true)}
@@ -639,6 +719,45 @@ export default function App() {
                   }
                 ]);
               }}
+            />
+          </div>
+        )}
+
+        {activeTab === "profitPrime" && (
+          <div className="flex-1">
+            <ProfitPrimeTab
+              accentColor={profile.avatarColor}
+              providerConfig={providerConfig}
+            />
+          </div>
+        )}
+
+        {activeTab === "roles" && (
+          <div className="flex-1">
+            <RolesTab
+              accentColor={profile.avatarColor}
+              providerConfig={providerConfig}
+              profile={profile}
+              onChange={setProfile}
+            />
+          </div>
+        )}
+
+        {activeTab === "journal" && (
+          <div className="flex-1">
+            <JournalTab
+              accentColor={profile.avatarColor}
+              providerConfig={providerConfig}
+            />
+          </div>
+        )}
+
+        {activeTab === "combos" && (
+          <div className="flex-1">
+            <CombosTab
+              accentColor={profile.avatarColor}
+              skills={skills}
+              providerConfig={providerConfig}
             />
           </div>
         )}
