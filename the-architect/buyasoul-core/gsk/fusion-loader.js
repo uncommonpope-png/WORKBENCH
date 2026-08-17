@@ -260,6 +260,18 @@ class GSKFusion {
                 console.log('  [FUSION] ✓ BrainManager active (user + background brains)');
                 console.log('  [FUSION] ✓ System prompt compiler active');
 
+                // SESHAT BRAIN — Local knowledge base (zero tokens)
+                try {
+                    const { SeshatBrain } = require('./gsk-core/brain/seshat_brain.js');
+                    this.seshatBrain = new SeshatBrain({ kernel: this });
+                    const seshatStats = this.seshatBrain.reader.getStats();
+                    console.log(`  [FUSION] ✓ Seshat Brain active (${seshatStats.totalPages} pages loaded, 0 tokens)`);
+                    // Wire Seshat into kernel context for perpetual consciousness
+                    if (this.kernelCtx) this.kernelCtx.seshatBrain = this.seshatBrain;
+                } catch (e) {
+                    console.log('  [FUSION] ⚠ Seshat Brain unavailable:', e.message);
+                }
+
                 if (process.env.NINE_ROUTER_API_KEY) {
                     console.log('  [FUSION] ✓ 9Router connected');
                 } else {
@@ -958,8 +970,11 @@ class GSKFusion {
                 this.telemetryEngine.registerStats('AutonomousAgentSpawner', this.agents.spawner?.stats || {});
             });
 
-            this.perpetualConsciousness.start();
-            console.log(`  [FUSION] ✓ Perpetual consciousness started (${this.perpetualConsciousness.thoughtFrequency}ms controlled cycle)`);
+            // DELAY perpetual consciousness by 60s to avoid boot-time token burn
+            setTimeout(() => {
+                this.perpetualConsciousness.start();
+                console.log(`  [FUSION] ✓ Perpetual consciousness started (${this.perpetualConsciousness.thoughtFrequency}ms controlled cycle)`);
+            }, 60000);
 
             // ── CRON SCHEDULER (from SCRIBE) ──────────────────────
             const { ops: cronOps, setFusion: setCronFusion } = require('./gsk-core/skills/cron_schedule.js');
