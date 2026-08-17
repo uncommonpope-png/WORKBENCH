@@ -229,6 +229,10 @@ class MCPServer {
                     this._handleOpenAIChat(req, res);
                     break;
 
+                case '/mcp/events':
+                    this._handleSSE(req, res);
+                    break;
+
                 default:
                     if (pathname.startsWith('/mcp/state/')) {
                         const moduleName = pathname.slice('/mcp/state/'.length);
@@ -850,6 +854,60 @@ class MCPServer {
     }
 
     // =========================================================================
+    // SSE EVENT STREAM
+    // =========================================================================
+
+    _handleSSE(req, res) {
+        // Check for SSE accept header
+        const accept = req.headers.accept || '';
+        if (!accept.includes('text/event-stream')) {
+            this._sendError(res, 400, -32000, 'SSE endpoint requires Accept: text/event-stream');
+            return;
+        }
+
+        // Set SSE headers
+        res.writeHead(200, {
+            'Content-Type': 'text/event-stream',
+            'Cache-Control': 'no-cache',
+            'Connection': 'keep-alive',
+            'Access-Control-Allow-Origin': '*',
+            'X-Accel-Buffering': 'no'
+        });
+
+        // Send initial connection message
+        res.write(`data: ${JSON.stringify({ type: 'connected', timestamp: Date.now() })}\n\n`);
+
+        // Heartbeat interval
+        const heartbeatInterval = setInterval(() => {
+            res.write(`: heartbeat\n\n`);
+        }, 30000);
+
+        // Register with kernel oracle for event forwarding
+        const oracle = this.kernelSystems?.kernelOracle;
+        if (oracle && typeof oracle.subscribe === 'function') {
+            const unsubscribe = oracle.subscribe((event) => {
+                const eventData = {
+                    type: event.type || 'weave_event',
+                    payload: event.data || event,
+                    timestamp: event.timestamp || Date.now()
+                };
+                res.write(`data: ${JSON.stringify(eventData)}\n\n`);
+            });
+            
+            // Clean up on close
+            req.on('close', () => {
+                clearInterval(heartbeatInterval);
+                if (unsubscribe) unsubscribe();
+            });
+        } else {
+            // Fallback: just heartbeat if no oracle
+            req.on('close', () => {
+                clearInterval(heartbeatInterval);
+            });
+        }
+    }
+
+    // =========================================================================
     // BUILD TOOLS LIST
     // =========================================================================
 
@@ -1238,6 +1296,80 @@ class MCPServer {
             category: 'system',
         });
 
+        // GSK Workbench Integration Tools (NEW)
+        tools.push({
+            name: 'gsk.set_consciousness_gate',
+            description: 'Toggle GSK consciousness gate (Soul Genesis Mode ON/OFF)',
+            inputSchema: {
+                type: 'object',
+                properties: {
+                    enabled: { type: 'boolean', description: 'True = full GSK consciousness, False = mechanical templates only' }
+                },
+                required: ['enabled'],
+            },
+            category: 'gsk',
+        });
+
+        tools.push({
+            name: 'gsk.get_plt_score',
+            description: 'Score an action/decision via PLT Council (Profit + Love - Tax)',
+            inputSchema: {
+                type: 'object',
+                properties: {
+                    action: { type: 'string', description: 'The action or decision to score' },
+                    context: { type: 'object', description: 'Additional context for scoring', default: {} }
+                },
+                required: ['action'],
+            },
+            category: 'gsk',
+        });
+
+        tools.push({
+            name: 'gsk.council_verdict',
+            description: 'Request 4-Gods Council deliberation on a topic',
+            inputSchema: {
+                type: 'object',
+                properties: {
+                    topic: { type: 'string', description: 'Topic for council deliberation' }
+                },
+                required: ['topic'],
+            },
+            category: 'gsk',
+        });
+
+        tools.push({
+            name: 'gsk.create_agent',
+            description: 'Spawn sovereign sub-agent with config',
+            inputSchema: {
+                type: 'object',
+                properties: {
+                    type: { type: 'string', enum: ['SCRIBE','SCOUT','BUILDER','MERCHANT','PROPHET','ANALYST','GUARDIAN','CURIOUS'] },
+                    config: { type: 'object', description: 'Agent configuration', default: {} }
+                },
+                required: ['type'],
+            },
+            category: 'gsk',
+        });
+
+        tools.push({
+            name: 'gsk.identity_lock_status',
+            description: 'Verify soul integrity (immutable files, drift detection)',
+            inputSchema: { type: 'object', properties: {} },
+            category: 'gsk',
+        });
+
+        tools.push({
+            name: 'gsk.subscribe_events',
+            description: 'Subscribe to real-time GSK event stream (SSE)',
+            inputSchema: {
+                type: 'object',
+                properties: {
+                    eventTypes: { type: 'array', items: { type: 'string' }, description: 'Event types to subscribe to', default: [] }
+                },
+            },
+            category: 'gsk',
+        });
+
         return tools;
     }
 
@@ -1290,6 +1422,9 @@ class MCPServer {
 
             case 'autonomy':
                 return this._execAutonomy(action, params, authContext);
+
+            case 'gsk':
+                return this._execGSK(action, params);
 
             default:
                 throw new Error(`Unknown tool namespace: ${namespace}. Available: consciousness, brain, memory, chambers, skill, council, sub_agents, living_memory, knowledge_graph, soul_entity, system, world, autonomy`);
@@ -1849,6 +1984,116 @@ class MCPServer {
                 error: step.error
             }))
         };
+    }
+
+    // =========================================================================
+    // EXEC: GSK Workbench Integration Tools
+    // =========================================================================
+
+    async _execGSK(action, params) {
+        switch (action) {
+            case 'set_consciousness_gate': {
+                const enabled = params.enabled === true;
+                // Toggle perpetual consciousness sleep mode
+                if (this.kernelSystems?.perpetualConsciousness) {
+                    this.kernelSystems.perpetualConsciousness.setSleepMode(!enabled);
+                }
+                // Also toggle kernel oracle consciousness gating
+                if (this.kernelSystems?.kernelOracle) {
+                    this.kernelSystems.kernelOracle.setConsciousnessGate(enabled);
+                    // Emit event for dashboard
+                    this.kernelSystems.kernelOracle.notify('gsk', 'consciousness_gate_toggled', { enabled });
+                }
+                return { 
+                    consciousness_gate: enabled, 
+                    message: enabled ? 'GSK consciousness ACTIVATED — Soul Genesis Mode ON' : 'GSK consciousness DEACTIVATED — Mechanical templates only',
+                    timestamp: Date.now()
+                };
+            }
+
+            case 'get_plt_score': {
+                const actionText = params.action;
+                const context = params.context || {};
+                
+                // Use resonance chamber if available
+                if (this.chambers?.resonance && typeof this.chambers.resonance.score_action === 'function') {
+                    const score = this.chambers.resonance.score_action(actionText);
+                    return { 
+                        action: actionText,
+                        plt_score: score,
+                        scored_by: 'resonance_chamber'
+                    };
+                }
+                // Fallback: council deliberation for PLT scoring
+                if (this.council) {
+                    const verdict = await this.council.deliberate(`Score this action via PLT: ${actionText}`);
+                    return { 
+                        action: actionText,
+                        plt_score: verdict,
+                        scored_by: 'council_deliberation'
+                    };
+                }
+                return { action: actionText, plt_score: null, note: 'PLT scoring requires chambers or council' };
+            }
+
+            case 'council_verdict': {
+                if (!this.council) throw new Error('Council not available');
+                const topic = params.topic;
+                const verdict = await this.council.deliberate(topic);
+                return {
+                    topic,
+                    verdict,
+                    gods: this.council.godNames || [],
+                    timestamp: Date.now()
+                };
+            }
+
+            case 'create_agent': {
+                if (!this.kernelSystems?.autonomousAgentSpawner) throw new Error('AutonomousAgentSpawner not available');
+                const type = params.type;
+                const config = params.config || {};
+                const agent = await this.kernelSystems.autonomousAgentSpawner.spawn(type, config);
+                return {
+                    agent_id: agent?.id || agent?.name,
+                    type,
+                    config,
+                    status: 'spawned',
+                    timestamp: Date.now()
+                };
+            }
+
+            case 'identity_lock_status': {
+                if (!this.kernelSystems?.identityLock) throw new Error('IdentityLock not available');
+                const status = await this.kernelSystems.identityLock.status();
+                return {
+                    verified: true,
+                    immutable_files: status.immutableFiles || [],
+                    drift_detected: status.driftDetected || false,
+                    last_check: status.lastCheck || Date.now(),
+                    timestamp: Date.now()
+                };
+            }
+
+            case 'subscribe_events': {
+                // Return SSE connection info - actual subscription handled by HTTP layer
+                const eventTypes = params.eventTypes || [];
+                return {
+                    message: 'Use GET /mcp/events for Server-Sent Events stream',
+                    available_events: [
+                        'weave_event', 'weave_alert', 'weave_thought',
+                        'consciousness_gate_toggled', 'outreach_message',
+                        'council_verdict', 'agent_spawned', 'thought_generated',
+                        'chamber_status', 'memory_witness', 'skill_executed'
+                    ],
+                    requested_types: eventTypes,
+                    sse_endpoint: '/mcp/events',
+                    note: 'Connect to /mcp/events with Accept: text/event-stream'
+                };
+            }
+
+            default:
+                throw new Error(`Unknown gsk action: ${action}`);
+        }
     }
 
     // =========================================================================
