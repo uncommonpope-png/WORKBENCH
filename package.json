@@ -2,17 +2,23 @@
   "name": "workbench-complete",
   "version": "1.0.0",
   "description": "BUYaSOUL ONE SYSTEM - Complete self-contained workbench with GSK, OmniRoute, CPL, Soul Economy, and Workbench UI",
-  "main": "workbench/server.ts",
+  "type": "module",
   "scripts": {
-    "install:all": "cd workbench && npm install && cd ../omniroute && npm install && cd ../cpl && npm install",
-    "start:gsk": "cd gsk && node gsk_daemon.js",
-    "start:omniroute": "cd omniroute && npm start",
-    "start:cpl": "cd cpl && node genesis-host.cjs",
-    "start:workbench": "cd workbench && npm run dev:server",
-    "start": "concurrently \"npm run start:gsk\" \"npm run start:omniroute\" \"npm run start:cpl\" \"npm run start:workbench\"",
+    "install:all": "npm install --prefix workbench && npm install --prefix omniroute && npm install --prefix cpl && npm install --prefix soul-economy",
+    "install:workbench": "npm install --prefix workbench",
+    "install:omniroute": "npm install --prefix omniroute",
+    "install:cpl": "npm install --prefix cpl",
+    "install:soul-economy": "npm install --prefix soul-economy",
+    "start:gsk": "npm start --prefix gsk",
+    "start:omniroute": "npm start --prefix omniroute",
+    "start:cpl": "npm start --prefix cpl",
+    "start:workbench": "npm run dev:server --prefix workbench",
+    "start": "concurrently --kill-others \"npm run start:omniroute\" \"npm run start:gsk\" \"npm run start:cpl\" \"npm run start:workbench\"",
     "dev": "npm run start",
-    "build": "cd workbench && npm run build",
-    "lint": "cd workbench && npm run lint"
+    "build": "npm run build --prefix workbench",
+    "lint": "npm run lint --prefix workbench",
+    "clean": "rm -rf workbench/dist omniroute/.next omniroute/dist cpl/node_modules gsk/node_modules",
+    "fresh": "npm run clean && npm run install:all"
   },
   "keywords": [
     "buyasoul",
@@ -27,5 +33,8 @@
   "license": "MIT",
   "devDependencies": {
     "concurrently": "^8.2.2"
+  },
+  "engines": {
+    "node": ">=20.0.0"
   }
 }
