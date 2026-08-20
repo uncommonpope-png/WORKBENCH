@@ -79,6 +79,38 @@ class SkillCompiler {
         return;
       }
 
+      // Stricter validation to prevent corrupted auto_*.js files
+      const validationErrors = [];
+      if (cleanCode.trim().startsWith('`') || cleanCode.trim().startsWith('```')) {
+        validationErrors.push('Code still contains markdown fences/backticks');
+      }
+      if (cleanCode.includes('<!DOCTYPE') || cleanCode.includes('<html') || cleanCode.includes('<body')) {
+        validationErrors.push('Code contains HTML/XML tags');
+      }
+      if (!cleanCode.includes('module.exports') && !cleanCode.includes('exports.')) {
+        validationErrors.push('Code missing module.exports or exports');
+      }
+      if (!cleanCode.includes('execute')) {
+        validationErrors.push('Code missing execute function');
+      }
+      // Check for balanced braces (basic syntax check)
+      const openBraces = (cleanCode.match(/{/g) || []).length;
+      const closeBraces = (cleanCode.match(/}/g) || []).length;
+      if (openBraces !== closeBraces) {
+        validationErrors.push(`Unbalanced braces: ${openBraces} open vs ${closeBraces} close`);
+      }
+      // Check for balanced parentheses
+      const openParens = (cleanCode.match(/\(/g) || []).length;
+      const closeParens = (cleanCode.match(/\)/g) || []).length;
+      if (Math.abs(openParens - closeParens) > 2) {
+        validationErrors.push(`Potentially unbalanced parentheses`);
+      }
+
+      if (validationErrors.length > 0) {
+        console.log('[SkillCompiler] Rejecting invalid skill code:', validationErrors.join('; '));
+        return;
+      }
+
       // Normalize any hallucinated paths inside the code
       cleanCode = cleanCode.replace(/C:\\Users\\(?:Craig|craig|craigh)\\/gi, `C:\\Users\\${path.basename(require('os').homedir())}\\`);
       cleanCode = cleanCode.replace(/C:\\GSK\\/gi, process.env.GSK_ROOT || path.join(__dirname, '..'));
