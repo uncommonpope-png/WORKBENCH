@@ -41,6 +41,9 @@ export const OmniRouteTab: React.FC<OmniRouteTabProps> = ({ accentColor }) => {
   const [newMessage, setNewMessage] = useState("");
   const [sending, setSending] = useState(false);
   const [providerFilter, setProviderFilter] = useState<string>("all");
+  // OPERATION GSK-HEART: prefer the internal GSK-HEART router; only fall back to
+  // the external OmniRoute service when GSK-HEART is not wired to the backend.
+  const GSK_HEART_ENABLED = true;
 
   useEffect(() => {
     fetchHealth();
@@ -49,22 +52,22 @@ export const OmniRouteTab: React.FC<OmniRouteTabProps> = ({ accentColor }) => {
 
   const fetchHealth = async () => {
     try {
-      const res = await fetch("/api/omniroute/health");
+      const res = await fetch(GSK_HEART_ENABLED ? "/api/gsk-heart/health" : "/api/omniroute/health");
       if (res.ok) {
         const data = await res.json();
         setHealth(data);
       }
     } catch (e) {
-      console.error("OmniRoute health check failed:", e);
+      console.error("GSK-HEART health check failed:", e);
     }
   };
 
   const fetchModels = async () => {
     try {
-      const res = await fetch("/api/omniroute/models");
+      const res = await fetch(GSK_HEART_ENABLED ? "/api/gsk-heart/models" : "/api/omniroute/models");
       if (res.ok) {
         const data = await res.json();
-        setModels(data.data || data.models || []);
+        setModels(data.data || data.models || data.providers || []);
       }
     } catch (e) {
       console.error("Failed to fetch models:", e);
@@ -82,7 +85,7 @@ export const OmniRouteTab: React.FC<OmniRouteTabProps> = ({ accentColor }) => {
     setNewMessage("");
 
     try {
-      const res = await fetch("/api/omniroute/chat", {
+      const res = await fetch(GSK_HEART_ENABLED ? "/api/gsk-heart/chat" : "/api/omniroute/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({

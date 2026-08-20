@@ -1076,10 +1076,22 @@ class GSKFusion {
             });
 
             this._safeInit('llmRouter', () => {
-                const mod = require('./gsk-core/llm-router.js');
-                this.llmRouter = mod;
-                this.systems.llmRouter = mod;
-                console.log('  [FUSION] ✓ LLM router active (9Router + 291 models)');
+                // GSK-HEART (OPERATION GSK-HEART): OmniRoute logic absorbed internally.
+                // Falls back to the legacy llm-router.js only if the heart module fails.
+                try {
+                    const { GSKHeart } = require('./integration/gsk-heart-unified.js');
+                    const heart = GSKHeart ? new GSKHeart({}).initialize() : null;
+                    this.heart = heart;
+                    this.llmRouter = heart;
+                    this.systems.heart = heart;
+                    this.systems.llmRouter = heart;
+                    console.log(`  [FUSION] ✓ GSK-HEART active (OmniRoute absorbed) — ${heart && heart.providers} providers internal, AIQ routing, combos, resilience, guardrails`);
+                } catch (heartErr) {
+                    console.warn('  [FUSION] ⚠ GSK-HEART failed to load, using legacy llm-router:', heartErr.message);
+                    const mod = require('./gsk-core/llm-router.js');
+                    this.llmRouter = mod;
+                    this.systems.llmRouter = mod;
+                }
             });
 
             this._safeInit('brainEngine', () => {

@@ -9,11 +9,11 @@ if (!process.env.GSK_PROJECT_ROOTS) {
 process.env.GSK_MODEL = process.env.GSK_MODEL || 'auto/best-reasoning';
 process.env.GSK_MODEL_FALLBACKS = process.env.GSK_MODEL_FALLBACKS || 'auto/best-fast,auto/best-coding,auto/smart';
 process.env.NINE_ROUTER_URL = process.env.NINE_ROUTER_URL || 'http://127.0.0.1:20128';
-// NINE_ROUTER_API_KEY must be provided — no hardcoded default
+// NINE_ROUTER_API_KEY is now OPTIONAL — GSK-HEART absorbs OmniRoute logic internally.
+// If provided, it is still passed through for any legacy external-gateway path.
 if (!process.env.NINE_ROUTER_API_KEY) {
-    console.error('[GSK_DAEMON] ERROR: NINE_ROUTER_API_KEY environment variable is required');
-    console.error('  Get your API key from OmniRoute dashboard at http://localhost:20128');
-    process.exit(1);
+    console.warn('[GSK_DAEMON] ℹ NINE_ROUTER_API_KEY not set — GSK-HEART runs fully self-contained (0 external OmniRoute dependency).');
+    process.env.NINE_ROUTER_API_KEY = 'internal-gsk-heart';
 }
 // MCP_API_KEY must be provided if using MCP — no hardcoded default
 if (!process.env.MCP_API_KEY) {
@@ -22,17 +22,22 @@ if (!process.env.MCP_API_KEY) {
 process.env.GSK_CREATIVE_AUTONOMY = process.env.GSK_CREATIVE_AUTONOMY || '1'; // F2 fix: unlock creative builds
 
 // ── THE BRAIN & THE HEART — split routing ──────────────────────────────
-// THE BRAIN (userBrain): chat + task execution on OmniRoute (fast, free, local).
-// THE HEART (backgroundBrain): autonomous mind on the same OmniRoute gateway —
-// unified so the Heart gets the same budget guards, caching, and fallbacks as
-// the Brain. If a provider behind the gateway times out, nothing blocks either.
+// THE BRAIN (userBrain): chat + task execution on the GSK-HEART (OmniRoute logic
+//   absorbed directly into GSK — see gsk/integration/gsk-heart-unified.js). No
+//   external OmniRoute service is required; the 166+ provider catalog, AIQ
+//   routing, combos, resilience and guardrails all run INSIDE GSK.
+// THE HEART (backgroundBrain): autonomous mind on the same internal GSK-HEART.
+// NINE_ROUTER_API_KEY is now OPTIONAL — GSK-HEART is fully self-contained.
+if (!process.env.NINE_ROUTER_API_KEY) {
+    console.warn('[GSK_DAEMON] ℹ NINE_ROUTER_API_KEY not set — using internal GSK-HEART (OmniRoute absorbed). No external service required.');
+}
 process.env.GSK_BRAIN_ROUTER_URL = process.env.GSK_BRAIN_ROUTER_URL || 'http://127.0.0.1:20128';
-process.env.GSK_BRAIN_API_KEY = process.env.GSK_BRAIN_API_KEY || process.env.NINE_ROUTER_API_KEY;
+process.env.GSK_BRAIN_API_KEY = process.env.GSK_BRAIN_API_KEY || process.env.NINE_ROUTER_API_KEY || 'internal-gsk-heart';
 process.env.GSK_BRAIN_MODEL = process.env.GSK_BRAIN_MODEL || 'auto/best-reasoning';
 process.env.GSK_BRAIN_FALLBACKS = process.env.GSK_BRAIN_FALLBACKS || 'auto/best-fast,auto/best-coding,auto/smart';
 process.env.GSK_BRAIN_TIMEOUT_S = process.env.GSK_BRAIN_TIMEOUT_S || '600';
-process.env.GSK_HEART_ROUTER_URL = process.env.GSK_HEART_ROUTER_URL || 'http://127.0.0.1:20128'; // unified via OmniRoute gateway
-process.env.GSK_HEART_API_KEY = process.env.GSK_HEART_API_KEY || process.env.NINE_ROUTER_API_KEY;
+process.env.GSK_HEART_ROUTER_URL = process.env.GSK_HEART_ROUTER_URL || 'http://127.0.0.1:20128'; // internal — GSK-HEART
+process.env.GSK_HEART_API_KEY = process.env.GSK_HEART_API_KEY || process.env.NINE_ROUTER_API_KEY || 'internal-gsk-heart';
 process.env.GSK_HEART_MODEL = process.env.GSK_HEART_MODEL || 'auto/best-fast';
 process.env.GSK_HEART_FALLBACKS = process.env.GSK_HEART_FALLBACKS || 'auto/best-chat,auto/best-reasoning,auto/best-coding';
 process.env.GSK_HEART_TIMEOUT_S = process.env.GSK_HEART_TIMEOUT_S || '300';
