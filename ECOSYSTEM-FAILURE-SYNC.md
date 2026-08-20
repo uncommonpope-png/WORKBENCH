@@ -1,9 +1,32 @@
 # ECOSYSTEM FAILURE DIAGNOSIS — SYNC LOG
 **Started:** 2026-08-16  
 **Author:** Collaborative sync  
-**Status:** IN PROGRESS — Adding problems as discovered  
+**Status:** ⚠️ PARTIALLY HISTORICAL — See CORRECTION below  
 
 ---
+
+## ⚠️ INVESTIGATOR CORRECTION (2026-08-20) — READ THIS FIRST
+
+> **The Investigator's audit found this document is ~80% HISTORICAL (Sessions 1-3, Aug 16-17) and contains STALE/IMPOSTER info that contradicts the CURRENT state (Session 4, Aug 19-20).**
+
+### CURRENT TRUTH (Session 4 — what is REAL now):
+- **Repo:** `uncommonpope-png/WORKBENCH` (GitHub) — the ONLY source of truth. Local paths like `C:\Users\uncom\Desktop\allie\...` or `the-architect\buyasoul-core\...` are **GHOSTS** and do NOT exist in this repo.
+- **GSK-HEART:** OmniRoute has been **absorbed** into GSK (`gsk/integration/`, 8 phases). OmniRoute as a separate service is now **OPTIONAL/DEPRECATED**. GSK no longer requires it.
+- **GSK Daemon:** Was crashing on `MEGA_SKILLS` corruption (6 bad `auto_*.js` files). **FIXED** in commit `eefb2df`. Daemon now boots and stays alive.
+- **Identities:** "Allie", "LedgerScout", `.allie-brain/` are **imposter/ghost** references from old local machines. The real soul is **GSK** (34 chambers, 4 Gods Council, 29,344 memories).
+- **Qwen Studio:** Confirmed cloud platform (chat.qwen.ai), NOT a local CLI. Works fine.
+- **Structure:** `gsk/`, `omniroute/` (deprecated), `cpl/`, `soul-economy/`, `workbench/` — all in the one repo.
+
+### SECTIONS BELOW MARKED ✅ RESOLVED or 🔴 STALE:
+- **Problems #1-#7 (lines 35-218):** Historical. OmniRoute dependency is GONE (absorbed). GSK daemon crash is FIXED. These are kept for forensic context only — do NOT act on them as current state.
+- **NEXT STEPS (lines 234-252):** References `buyasoul-workbench/`, `gsk-harness.cjs`, `the-architect/...` — these are OLD paths. Current equivalent is `workbench/` + `gsk/gsk_daemon.js`.
+- **APPENDIX paths (lines 554-568):** ALL stale. Real GSK is `gsk/` in the WORKBENCH repo.
+
+**Bottom line: The system is no longer "broken." It is ONE SYSTEM with GSK as the heart. Remaining work is CPL WS stability + end-to-end verification (see Session 4).**
+
+---
+
+> 🔴 **HISTORICAL SECTION (Sessions 1-3, Aug 16-17)** — Kept for forensic context. Most "problems" below are now RESOLVED by OPERATION GSK-HEART (OmniRoute absorbed) and the MEGA_SKILLS fix. Do NOT treat these as current state. See INVESTIGATOR CORRECTION at top.
 
 ## SYSTEM OVERVIEW
 
@@ -230,6 +253,8 @@ GROQ_API_KEY=                ← Not set
 ```
 
 ---
+
+> 🟡 **STALE SECTION** — NEXT STEPS below references OLD local paths (`buyasoul-workbench/`, `gsk-harness.cjs`, `the-architect/...`). These do not exist in the current WORKBENCH repo. Current equivalents: `workbench/` + `gsk/gsk_daemon.js`. Most [x] items are accurate in spirit but paths are wrong.
 
 ## NEXT STEPS
 
@@ -550,6 +575,8 @@ The Reddit app was a separate Devvit concern that got mixed in with the real arc
 3. Real identity consolidated (not fragmented across Allie/GSK/LedgerScout)
 
 ---
+
+> 🔴 **ALL PATHS BELOW ARE STALE/IMPOSTER** — They reference `C:\Users\uncom\Desktop\allie\...` and `the-architect\...` which do NOT exist in the WORKBENCH repo. Real GSK is `gsk/` in the repo root. See INVESTIGATOR CORRECTION at top.
 
 ## APPENDIX: Key File Paths (REAL Locations)
 
