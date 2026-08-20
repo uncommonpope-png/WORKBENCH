@@ -41,9 +41,35 @@ function loadSkillFiles() {
         f.endsWith('.js') && f !== 'mega_skills.js'
     );
 
+    function isValidSkillFile(content) {
+        if (!content || typeof content !== 'string') return false;
+        if (content.length < 50) return false;
+        if (content.trim().startsWith('`')) return false;
+        if (content.includes('<!DOCTYPE') || content.includes('<html')) return false;
+        if (!content.includes('module.exports') && !content.includes('exports.')) return false;
+        if (!content.includes('execute')) return false;
+        if (!content.includes('}') || content.trim().endsWith('{')) return false;
+        return true;
+    }
+
     for (const file of skillFiles) {
         try {
             const filePath = path.join(skillsDir, file);
+            
+            // Pre-validate file content before requiring
+            let fileContent;
+            try {
+                fileContent = fs.readFileSync(filePath, 'utf-8');
+            } catch (readErr) {
+                console.warn(`[MEGA_SKILLS] Cannot read skill file: ${file} | Reason: ${readErr.message}`);
+                continue;
+            }
+
+            if (!isValidSkillFile(fileContent)) {
+                console.warn(`[MEGA_SKILLS] Skipping invalid/corrupted skill file: ${file}`);
+                continue;
+            }
+
             const mod = require(filePath);
 
             for (const [exportName, skillFn] of Object.entries(mod)) {
