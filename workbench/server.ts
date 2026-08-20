@@ -32,9 +32,10 @@ let gskHeartInitialized = false;
 async function initializeGSKHeart() {
   if (gskHeartInitialized) return GSKHeart;
   try {
-    const { GSKHeart: GSKHeartClass } = await import(
+    const mod = await import(
       `file://${path.join(REPO_ROOT, "gsk/integration/gsk-heart-unified.js")}`
     );
+    const GSKHeartClass = mod.GSKHeartUnified || mod.GSKHeart;
     GSKHeart = new GSKHeartClass();
     const creds: Record<string, string> = {};
     if (process.env.NINE_ROUTER_API_KEY) creds.omniroute = process.env.NINE_ROUTER_API_KEY;
@@ -355,34 +356,35 @@ app.post("/api/gsk-heart/route", async (req, res) => {
 
 app.post("/api/gsk-heart/chat", async (req, res) => {
   try {
-    const { prompt, model, credentials, guardrailOptions } = req.body;
-    if (!prompt) return res.status(400).json({ error: "Missing prompt" });
+    const { prompt, model, messages, temperature, max_tokens, credentials } = req.body;
+    if (!prompt && !messages) return res.status(400).json({ error: "Missing prompt or messages" });
     const heart = await initializeGSKHeart();
     if (!heart) return res.status(503).json({ error: "GSK-HEART not initialized" });
-    
-    res.setHeader('Content-Type', 'text/event-stream');
-    res.setHeader('Cache-Control', 'no-cache');
-    res.setHeader('Connection', 'keep-alive');
-    
-    const request = { prompt, model, credentials, guardrailOptions };
-    for await (const chunk of heart.chat(request)) {
-      res.write(chunk);
-    }
-    res.end();
-  } catch (err: any) {
-    res.write(`data: ${JSON.stringify({ error: err.message })}\n\n`);
-    res.end();
-  }
-});
-
-app.post("/api/gsk-heart/chat/sync", async (req, res) => {
-  try {
-    const { prompt, model, credentials, guardrailOptions } = req.body;
-    if (!prompt) return res.status(400).json({ error: "Missing prompt" });
-    const heart = await initializeGSKHeart();
-    if (!heart) return res.status(503).json({ error: "GSK-HEART not initialized" });
-    const result = await heart.chatSync({ prompt, model, credentials, guardrailOptions });
-    res.json({ success: true, response: result });
+    const result = await heart.complete({
+      prompt,
+      messages,
+      model,
+      options: { temperature, maxTokens: max_tokens, credentials }
+    });
+    // Format response as OpenAI-compatible
+    const content = result.response || result.content || result.text || JSON.stringify(result);
+    const tokens = result.tokens || result.tokens_used || content.length / 4;
+    res.json({
+      success: true,
+      id: `gsk-heart-${Date.now()}`,
+      object: "chat.completion",
+      model: model || "auto",
+      choices: [{
+        index: 0,
+        message: { role: "assistant", content },
+        finish_reason: "stop"
+      }],
+      usage: {
+        prompt_tokens: Math.floor(tokens / 2),
+        completion_tokens: Math.floor(tokens / 2),
+        total_tokens: tokens
+      }
+    });
   } catch (err: any) {
     res.json({ success: false, error: err.message });
   }
@@ -390,12 +392,45 @@ app.post("/api/gsk-heart/chat/sync", async (req, res) => {
 
 app.post("/api/gsk-heart/combo", async (req, res) => {
   try {
-    const { combo, input } = req.body;
+    const { combo, input, options } = req.body;
     if (!combo || !input) return res.status(400).json({ error: "Missing combo or input" });
     const heart = await initializeGSKHeart();
     if (!heart) return res.status(503).json({ error: "GSK-HEART not initialized" });
-    const result = heart.runCombo(combo, input);
+    const result = await heart.runCombo(combo, input, options || {});
     res.json({ success: true, ...result });
+  } catch (err: any) {
+    res.json({ success: false, error: err.message });
+  }
+});
+
+app.get("/api/gsk-heart/health", async (req, res) => {
+  try {
+    const heart = await initializeGSKHeart();
+    if (!heart) return res.status(503).json({ success: false, error: "GSK-HEART not initialized" });
+    const health = heart.getRoutingReport();
+    res.json({ success: true, initialized: true, heart: 'GSK-HEART (OmniRoute absorbed)', ...health });
+  } catch (err: any) {
+    res.json({ success: false, error: err.message });
+  }
+});
+
+app.get("/api/gsk-heart/models", async (req, res) => {
+  try {
+    const heart = await initializeGSKHeart();
+    if (!heart) return res.status(503).json({ error: "GSK-HEART not initialized" });
+    const providerCatalog = require(path.join(REPO_ROOT, "gsk/integration/catalogs/provider-catalog.js"));
+    const providers = providerCatalog.ALL_PROVIDERS || providerCatalog.providers || {};
+    const allProviders = Object.values(providers);
+    const models = allProviders.map((p: any) => ({
+      id: p.id || p.name,
+      object: "model",
+      created: p.created || Date.now(),
+      owned_by: p.authType || p.provider || "gsk-heart",
+      provider: p.provider || "internal",
+      context_length: p.context_length || p.contextLength || 4096,
+      pricing: p.pricing ? { prompt: p.pricing.prompt, completion: p.pricing.completion } : undefined,
+    }));
+    res.json({ success: true, data: models, models: models, count: models.length });
   } catch (err: any) {
     res.json({ success: false, error: err.message });
   }
@@ -405,9 +440,9 @@ app.get("/api/gsk-heart/providers", async (req, res) => {
   try {
     const heart = await initializeGSKHeart();
     if (!heart) return res.status(503).json({ error: "GSK-HEART not initialized" });
-    const providers = heart.listProviders();
-    const families = heart.getFamilies();
-    res.json({ success: true, providers, families, count: providers.length });
+    const providerCatalog = require(path.join(REPO_ROOT, "gsk/integration/catalogs/provider-catalog.js"));
+    const providers = Object.values(providerCatalog.ALL_PROVIDERS || providerCatalog.providers || {});
+    res.json({ success: true, providers, count: providers.length });
   } catch (err: any) {
     res.json({ success: false, error: err.message });
   }
@@ -417,8 +452,19 @@ app.get("/api/gsk-heart/stats", async (req, res) => {
   try {
     const heart = await initializeGSKHeart();
     if (!heart) return res.status(503).json({ error: "GSK-HEART not initialized" });
-    const stats = heart.stats();
+    const stats = heart.getHealthReport();
     res.json({ success: true, ...stats });
+  } catch (err: any) {
+    res.json({ success: false, error: err.message });
+  }
+});
+
+app.get("/api/gsk-heart/health", async (req, res) => {
+  try {
+    const heart = await initializeGSKHeart();
+    if (!heart) return res.status(503).json({ success: false, error: "GSK-HEART not initialized" });
+    const health = heart.getRoutingReport();
+    res.json({ success: true, initialized: true, heart: 'GSK-HEART (OmniRoute absorbed)', ...health });
   } catch (err: any) {
     res.json({ success: false, error: err.message });
   }
