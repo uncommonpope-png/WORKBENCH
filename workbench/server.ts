@@ -6,6 +6,11 @@ import { createServer as createViteServer } from "vite";
 import { fileURLToPath } from "url";
 import { spawn, ChildProcess } from "child_process";
 
+// Synthesizer additions
+import { attachProvenance } from "./src/lib/provenance";
+import { validateGskMemories } from "./src/schemas/gsk.schema";
+import { validateGskResponse } from "./src/connectors/gsk-validator";
+
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const REPO_ROOT = path.resolve(__dirname, "..");
@@ -172,12 +177,28 @@ app.get("/api/gsk/events", async (req, res) => {
         tool: "memory.query",
         args: { type: "proactive_message", limit: 5 }
       }, 5000);
-      if (mem.result?.memories?.length) {
-        for (const m of mem.result.memories) {
-          res.write(`data: ${JSON.stringify({ type: "outreach", message: m.content, timestamp: m.timestamp })}\n\n`);
-        }
+
+      const candidate = mem.result?.memories || mem;
+      const parsed = validateGskMemories(candidate);
+      if (!parsed.success) {
+        // permissive: emit a validation warning event with structured errors
+        res.write(`data: ${JSON.stringify({ type: "validation_warning", source: "gsk", errors: parsed.error.format() })}\n\n`);
       }
-    } catch {}
+
+      const items = parsed.success ? parsed.data : (Array.isArray(candidate) ? candidate : []);
+      for (const m of items) {
+        const withProv = attachProvenance(m, {
+          source: 'gsk',
+          sourceRecordId: (m as any).id || null,
+          fetchedAt: new Date().toISOString(),
+          confidence: 0.9,
+          transformSteps: ['zod-gsk-v1']
+        });
+        res.write(`data: ${JSON.stringify({ type: "outreach", message: withProv.content, timestamp: withProv.timestamp, __provenance: withProv.__provenance })}\n\n`);
+      }
+    } catch (e) {
+      // intentionally silent to keep SSE alive; could log
+    }
   }, 15000);
 
   req.on("close", () => clearInterval(interval));
