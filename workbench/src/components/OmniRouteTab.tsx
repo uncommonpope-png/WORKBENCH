@@ -41,9 +41,6 @@ export const OmniRouteTab: React.FC<OmniRouteTabProps> = ({ accentColor }) => {
   const [newMessage, setNewMessage] = useState("");
   const [sending, setSending] = useState(false);
   const [providerFilter, setProviderFilter] = useState<string>("all");
-  // OPERATION GSK-HEART: prefer the internal GSK-HEART router; only fall back to
-  // the external OmniRoute service when GSK-HEART is not wired to the backend.
-  const GSK_HEART_ENABLED = true;
 
   useEffect(() => {
     fetchHealth();
@@ -52,7 +49,7 @@ export const OmniRouteTab: React.FC<OmniRouteTabProps> = ({ accentColor }) => {
 
   const fetchHealth = async () => {
     try {
-      const res = await fetch(GSK_HEART_ENABLED ? "/api/gsk-heart/health" : "/api/omniroute/health");
+      const res = await fetch("/api/gsk-heart/stats");
       if (res.ok) {
         const data = await res.json();
         setHealth(data);
@@ -64,13 +61,13 @@ export const OmniRouteTab: React.FC<OmniRouteTabProps> = ({ accentColor }) => {
 
   const fetchModels = async () => {
     try {
-      const res = await fetch(GSK_HEART_ENABLED ? "/api/gsk-heart/models" : "/api/omniroute/models");
+      const res = await fetch("/api/gsk-heart/providers");
       if (res.ok) {
         const data = await res.json();
-        setModels(data.data || data.models || data.providers || []);
+        setModels(data.providers || []);
       }
     } catch (e) {
-      console.error("Failed to fetch models:", e);
+      console.error("GSK-HEART models fetch failed:", e);
     } finally {
       setLoading(false);
     }
@@ -85,18 +82,18 @@ export const OmniRouteTab: React.FC<OmniRouteTabProps> = ({ accentColor }) => {
     setNewMessage("");
 
     try {
-      const res = await fetch(GSK_HEART_ENABLED ? "/api/gsk-heart/chat" : "/api/omniroute/chat", {
+      const res = await fetch("/api/gsk-heart/chat/sync", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
+          prompt: msg,
           model: selectedModel,
-          messages: chatHistory.map(m => ({ role: m.role, content: m.content })).concat(userMsg),
           temperature: 0.7,
           max_tokens: 2048,
         }),
       });
       const data = await res.json();
-      if (data.choices?.[0]?.message) {
+      if (data.response) {
         const tokens = data.usage?.total_tokens || 0;
         const cost = calculateCost(selectedModel, data.usage?.prompt_tokens || 0, data.usage?.completion_tokens || 0);
         setTokenUsage(prev => ({
@@ -107,7 +104,7 @@ export const OmniRouteTab: React.FC<OmniRouteTabProps> = ({ accentColor }) => {
         }));
         setChatHistory(prev => [...prev, { 
           role: "assistant", 
-          content: data.choices[0].message.content, 
+          content: data.response, 
           model: selectedModel, 
           tokens, 
           timestamp: Date.now() 
@@ -150,8 +147,8 @@ export const OmniRouteTab: React.FC<OmniRouteTabProps> = ({ accentColor }) => {
             <Server className="w-6 h-6" style={{ color: health?.success ? '#00D4FF' : '#666' }} />
           </div>
           <div>
-            <h2 className="text-xl font-display font-bold text-white">OmniRoute Gateway</h2>
-            <p className="text-slate-400 text-sm">{models.length} models · {providers.length} providers · Token tracker</p>
+            <h2 className="text-xl font-display font-bold text-white">GSK-HEART Router</h2>
+            <p className="text-slate-400 text-sm">{models.length} providers internal · {providers.length} families · OmniRoute absorbed</p>
           </div>
         </div>
         <div className="flex items-center gap-2">
@@ -159,7 +156,11 @@ export const OmniRouteTab: React.FC<OmniRouteTabProps> = ({ accentColor }) => {
             <RefreshCw className="w-4 h-4" />
             Refresh
           </button>
-          <a href="http://127.0.0.1:20128" target="_blank" rel="noopener noreferrer" className="px-4 py-2 bg-cyan-500/20 border border-cyan-500/30 rounded-xl text-xs font-mono text-cyan-400 hover:bg-cyan-500/30 transition-colors flex items-center gap-1">
+          <button className="px-4 py-2 bg-cyan-500/20 border border-cyan-500/30 rounded-xl text-xs font-mono text-cyan-400 hover:bg-cyan-500/30 transition-colors" disabled title="OmniRoute absorbed into GSK-HEART">
+            <ExternalLink className="w-4 h-4 mr-1" />
+            Internal
+          </button>
+        </div>s font-mono text-cyan-400 hover:bg-cyan-500/30 transition-colors flex items-center gap-1">
             <ExternalLink className="w-4 h-4" />
             Open Dashboard
           </a>
