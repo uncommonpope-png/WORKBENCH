@@ -80,13 +80,6 @@ function percentile(sortedValues, p) {
 function aggregateValues(values) {
   if (values.length === 0) return { avg: 0, p50: 0, p95: 0 };
   const sorted = [...values].sort((a, b) => a - b);
-  const sum = sorted.reduce((acc, value) => acc + value, 0);
-  return sortedValues[index] != null ? sortedValues[index] : 0;
-}
-
-function aggregateValues(values) {
-  if (values.length === 0) return { avg: 0, p50: 0, p95: 0 };
-  const sorted = [...values].sort((a, b) => a - b);
   const sum = sorted.reduce((acc, v) => acc + v, 0);
   return {
     avg: sum / sorted.length,
@@ -396,16 +389,6 @@ class GSKHeartRouter {
   }
 }
 
-module.exports = {
-  computeAIQ,
-  percentile,
-  aggregateValues,
-  computeParetoFrontier,
-  summarizeObservations,
-  GSKHeartRouter,
-  return frontier.sort((a, b) => b.aiq - a.aiq || a.avgCostUsd - b.avgCostUsd);
-}
-
 // ---------------------------------------------------------------------------
 // Default model metric table (seed knowledge; GSK learns live stats over time)
 // Weights can be tuned per request via request.weights = {latency, cost, success}
@@ -437,7 +420,6 @@ function selectBestModel(request, candidates) {
   const successW = weights.success != null ? weights.success : 1;
 
   const requiredProvider = request ? request.requiredProvider : null;
-  const taskType = request ? request.taskType : null;
 
   const evaluated = [];
   for (const cand of candidates || []) {
@@ -456,7 +438,6 @@ function selectBestModel(request, candidates) {
     }
 
     const base = calculateAIQ(model, metrics);
-    // Apply per-dimension weighting to produce a request-tuned ranking score.
     const tunedAiq = Number(
       (
         base.aiq * successW -
@@ -471,7 +452,6 @@ function selectBestModel(request, candidates) {
     return { model: null, aiq: 0, all: [], frontier: [] };
   }
 
-  // Determine best by tuned AIQ, falling back to raw AIQ.
   const ranked = [...evaluated].sort((a, b) => b.tunedAiq - a.tunedAiq || b.aiq - a.aiq);
   const frontier = computeParetoFrontier(evaluated);
 
@@ -484,90 +464,13 @@ function selectBestModel(request, candidates) {
   };
 }
 
-// ---------------------------------------------------------------------------
-// GSKHeartRouter — unified router class with route(prompt, options)
-// ---------------------------------------------------------------------------
-
-class GSKHeartRouter {
-  constructor(options) {
-    this.options = options || {};
-    this.metrics = Object.assign({}, DEFAULT_METRICS);
-    this.observations = [];
-    this.taskProfiles = {
-      coding: ['auto/best-coding', 'auto/best-fast', 'gpt-4o', 'claude-3-5-sonnet', 'deepseek-chat'],
-      chat: ['auto/best-chat', 'auto/best-fast', 'gemini-flash', 'gpt-4o'],
-      reasoning: ['auto/best-reasoning', 'auto/best-chat', 'claude-3-5-sonnet'],
-      free: ['auto/best-free', 'llama-3.3-70b', 'deepseek-chat'],
-      search: ['auto/best-fast', 'perplexity', 'gemini-flash'],
-    };
-  }
-
-  /**
-   * Record a live observation so the router's internal stats improve over time.
-   */
-  recordObservation(obs) {
-    this.observations.push(obs);
-    if (this.observations.length > 5000) this.observations.shift();
-    const m = this.metrics[obs.model];
-    if (m) {
-      // Exponential moving average of latency/success.
-      const alpha = 0.2;
-      m.avgLatencyMs = m.avgLatencyMs * (1 - alpha) + asNumber(obs.latencyMs, m.avgLatencyMs) * alpha;
-      m.successRate = m.successRate * (1 - alpha) + (obs.success ? 1 : 0) * alpha;
-      if (obs.costUsd != null) m.avgCostUsd = m.avgCostUsd * (1 - alpha) + obs.costUsd * alpha;
-    }
-  }
-
-  inferTaskType(prompt, options) {
-    if (options && options.taskType) return options.taskType;
-    const p = String(prompt || '').toLowerCase();
-    if (/\b(write|fix|debug|code|function|class|implement|refactor|bug|typescript|python|javascript)\b/.test(p)) return 'coding';
-    if (/\b(why|explain|reason|prove|analyze|think step by step|logic)\b/.test(p)) return 'reasoning';
-    if (/\b(search|find|lookup|latest|news|current)\b/.test(p)) return 'search';
-    if (/\b(free|cheap|no api)\b/.test(p)) return 'free';
-    return 'chat';
-  }
-
-  /**
-   * route(prompt, options) → resolves the best model for THIS prompt using
-   * internal AIQ scoring + Pareto frontier. options: { taskType, weights,
-   * requiredProvider, candidates, fallbackModels }
-   */
-  route(prompt, options) {
-    options = options || {};
-    const taskType = this.inferTaskType(prompt, options);
-    const candidates =
-      options.candidates ||
-      this.taskProfiles[taskType] ||
-      this.taskProfiles.chat;
-
-    const fallbacks =
-      options.fallbackModels ||
-      (options.fallback ? options.fallback.split(',').map((s) => s.trim()).filter(Boolean) : []);
-
-    const allCandidates = [...candidates, ...fallbacks];
-    const selected = selectBestModel(
-      { prompt, weights: options.weights, requiredProvider: options.requiredProvider, taskType },
-      allCandidates
-    );
-
-    return {
-      model: selected.model,
-      aiq: selected.aiq,
-      taskType,
-      frontier: selected.frontier,
-      candidates: allCandidates,
-      ranked: selected.all,
-    };
-  }
-}
-
 module.exports = {
-  GSKHeartRouter,
-  calculateAIQ,
-  computeAiq,
-  computeParetoFrontier,
-  selectBestModel,
+  computeAIQ,
+  percentile,
   aggregateValues,
+  computeParetoFrontier,
+  summarizeObservations,
+  selectBestModel,
+  GSKHeartRouter,
   DEFAULT_METRICS,
 };

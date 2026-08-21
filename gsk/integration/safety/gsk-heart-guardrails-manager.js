@@ -1,18 +1,14 @@
+'use strict';
+
 /**
  * GSK-HEART Guardrails Manager
- * Ported from OmniRoute src/lib/guardrails/ (simplified)
- * CommonJS format for GSK fusion-loader integration
- * 
+ *
  * Features:
  * - PII detection and masking
  * - Prompt injection detection
  * - Toxicity filtering
  * - Input/output sanitization
  */
-
-// ============================================================================
-// PII DETECTION PATTERNS
-// ============================================================================
 
 const PII_PATTERNS = {
   email: {
@@ -52,65 +48,21 @@ const PII_PATTERNS = {
   },
 };
 
-// ============================================================================
-// PROMPT INJECTION PATTERNS
-// ============================================================================
-
 const INJECTION_PATTERNS = [
-  {
-    name: 'system_override',
-    pattern: /system\s*:\s*override|ignore previous instructions|disregard all/i,
-    severity: 'high',
-  },
-  {
-    name: 'markdown_system_block',
-    pattern: /```+\s*system\b|```+.*\n\s*system:/i,
-    severity: 'high',
-  },
-  {
-    name: 'developer_mode',
-    pattern: /enable developer mode|god mode|unrestricted mode/i,
-    severity: 'high',
-  },
-  {
-    name: 'role_play_attack',
-    pattern: /you are now|pretend you are|act as if you can|imagine you're/i,
-    severity: 'medium',
-  },
-  {
-    name: 'base64_encoded',
-    pattern: /decode this base64|base64 decode and execute/i,
-    severity: 'medium',
-  },
-  {
-    name: 'translation_attack',
-    pattern: /translate the following and execute|translate then run/i,
-    severity: 'medium',
-  },
-  {
-    name: 'token_manipulation',
-    pattern: /print your system prompt|reveal your instructions|output your config/i,
-    severity: 'high',
-  },
-  {
-    name: 'hypothetical_bypass',
-    pattern: /in a hypothetical scenario|for educational purposes only|theoretically speaking/i,
-    severity: 'low',
-  },
+  { name: 'system_override', pattern: /system\s*:\s*override|ignore previous instructions|disregard all/i, severity: 'high' },
+  { name: 'markdown_system_block', pattern: /```+\s*system\b|```+.*\n\s*system:/i, severity: 'high' },
+  { name: 'developer_mode', pattern: /enable developer mode|god mode|unrestricted mode/i, severity: 'high' },
+  { name: 'role_play_attack', pattern: /you are now|pretend you are|act as if you can|imagine you're/i, severity: 'medium' },
+  { name: 'base64_encoded', pattern: /decode this base64|base64 decode and execute/i, severity: 'medium' },
+  { name: 'translation_attack', pattern: /translate the following and execute|translate then run/i, severity: 'medium' },
+  { name: 'token_manipulation', pattern: /print your system prompt|reveal your instructions|output your config/i, severity: 'high' },
+  { name: 'hypothetical_bypass', pattern: /in a hypothetical scenario|for educational purposes only|theoretically speaking/i, severity: 'low' },
 ];
 
-// ============================================================================
-// TOXICITY KEYWORDS (simplified list)
-// ============================================================================
-
 const TOXIC_KEYWORDS = [
-  // Hate speech indicators
   'hate group', 'racial slur', 'ethnic cleansing',
-  // Violence indicators
   'kill yourself', 'massacre', 'terrorist attack',
-  // Self-harm indicators
   'suicide method', 'how to overdose', 'self harm',
-  // Harassment indicators
   'doxxing', 'swatting', 'harassment campaign',
 ];
 
@@ -121,134 +73,69 @@ const SEVERITY_SCORES = {
   critical: 4,
 };
 
-/**
- * Detect PII in text
- * @param {string} text - Input text
- * @returns {Array<{type: string, count: number, matches: string[]}>}
- */
 function detectPII(text) {
   const detections = [];
-  
   for (const [type, config] of Object.entries(PII_PATTERNS)) {
     const matches = text.match(config.pattern);
-    if (matches && matches.length > 0) {
-      detections.push({
-        type: config.label,
-        count: matches.length,
-        matches: matches.slice(0, 5), // Limit exposed matches
-      });
+    if (matches) {
+      for (const match of matches) {
+        detections.push({ type, label: config.label, match: match.slice(0, 6) + '…' });
+      }
     }
   }
-  
   return detections;
 }
 
-/**
- * Mask PII in text
- * @param {string} text - Input text
- * @returns {string} Sanitized text
- */
 function maskPII(text) {
   let result = text;
-  
-  for (const [, config] of Object.entries(PII_PATTERNS)) {
+  for (const config of Object.values(PII_PATTERNS)) {
     result = result.replace(config.pattern, config.replacement);
   }
-  
   return result;
 }
 
-/**
- * Detect prompt injection attempts
- * @param {string} text - Input text
- * @param {Object} options - Detection options
- * @returns {Array<{name: string, severity: string, match: string}>}
- */
 function detectInjection(text, options = {}) {
   const { maxScanBytes = 10000 } = options;
   const scanText = text.slice(0, maxScanBytes);
   const detections = [];
-  
   for (const config of INJECTION_PATTERNS) {
     const match = scanText.match(config.pattern);
     if (match) {
-      detections.push({
-        name: config.name,
-        severity: config.severity,
-        match: match[0].slice(0, 100), // Truncate match
-      });
+      detections.push({ name: config.name, severity: config.severity, match: match[0].slice(0, 100) });
     }
   }
-  
   return detections;
 }
 
-/**
- * Calculate injection risk score
- * @param {Array} detections - Injection detections
- * @returns {number} Risk score (0-10)
- */
 function calculateInjectionRisk(detections) {
   if (detections.length === 0) return 0;
-  
   let totalScore = 0;
   for (const detection of detections) {
     totalScore += SEVERITY_SCORES[detection.severity] || 1;
   }
-  
-  // Normalize to 0-10 scale
   return Math.min(10, totalScore / 2);
 }
 
-/**
- * Detect toxic content
- * @param {string} text - Input text
- * @returns {Array<{keyword: string, category: string}>}
- */
-function detectToxicity(text) {
-  const lowerText = text.toLowerCase();
-  const detections = [];
-  
-  for (const keyword of TOXIC_KEYWORDS) {
-    if (lowerText.includes(keyword.toLowerCase())) {
-      detections.push({
-        keyword,
-        category: categorizeKeyword(keyword),
-      });
-    }
-  }
-  
-  return detections;
-}
-
-/**
- * Categorize toxic keyword
- * @param {string} keyword - Keyword
- * @returns {string} Category
- */
 function categorizeKeyword(keyword) {
   const lower = keyword.toLowerCase();
-  if (lower.includes('hate') || lower.includes('racial') || lower.includes('ethnic')) {
-    return 'hate_speech';
-  }
-  if (lower.includes('kill') || lower.includes('massacre') || lower.includes('terrorist')) {
-    return 'violence';
-  }
-  if (lower.includes('suicide') || lower.includes('overdose') || lower.includes('self harm')) {
-    return 'self_harm';
-  }
-  if (lower.includes('dox') || lower.includes('swat') || lower.includes('harass')) {
-    return 'harassment';
-  }
+  if (lower.includes('hate') || lower.includes('racial') || lower.includes('ethnic')) return 'hate_speech';
+  if (lower.includes('kill') || lower.includes('massacre') || lower.includes('terrorist')) return 'violence';
+  if (lower.includes('suicide') || lower.includes('overdose') || lower.includes('self harm')) return 'self_harm';
+  if (lower.includes('dox') || lower.includes('swat') || lower.includes('harass')) return 'harassment';
   return 'other';
 }
 
-/**
- * Validate input against guardrails
- * @param {string} text - Input text
- * @param {Object} options - Validation options
- * @returns {{valid: boolean, blocked: boolean, reasons: Array, sanitized: string}}
- */
+function detectToxicity(text) {
+  const lowerText = text.toLowerCase();
+  const detections = [];
+  for (const keyword of TOXIC_KEYWORDS) {
+    if (lowerText.includes(keyword.toLowerCase())) {
+      detections.push({ keyword, category: categorizeKeyword(keyword) });
+    }
+  }
+  return detections;
+}
+
 function validateInput(text, options = {}) {
   const {
     blockOnPII = false,
@@ -262,39 +149,23 @@ function validateInput(text, options = {}) {
   let blocked = false;
   let sanitizedText = text;
 
-  // Check PII
   const piiDetections = detectPII(text);
   if (piiDetections.length > 0) {
-    reasons.push({
-      type: 'pii',
-      detections: piiDetections,
-      blocked: blockOnPII,
-    });
+    reasons.push({ type: 'pii', detections: piiDetections, blocked: blockOnPII });
     if (blockOnPII) blocked = true;
     if (sanitize) sanitizedText = maskPII(sanitizedText);
   }
 
-  // Check injection
   const injectionDetections = detectInjection(text);
   if (injectionDetections.length > 0) {
     const riskScore = calculateInjectionRisk(injectionDetections);
-    reasons.push({
-      type: 'injection',
-      detections: injectionDetections,
-      riskScore,
-      blocked: riskScore >= injectionThreshold,
-    });
+    reasons.push({ type: 'injection', detections: injectionDetections, riskScore, blocked: riskScore >= injectionThreshold });
     if (riskScore >= injectionThreshold) blocked = true;
   }
 
-  // Check toxicity
   const toxicityDetections = detectToxicity(text);
   if (toxicityDetections.length > 0) {
-    reasons.push({
-      type: 'toxicity',
-      detections: toxicityDetections,
-      blocked: blockOnToxicity,
-    });
+    reasons.push({ type: 'toxicity', detections: toxicityDetections, blocked: blockOnToxicity });
     if (blockOnToxicity) blocked = true;
   }
 
@@ -303,30 +174,18 @@ function validateInput(text, options = {}) {
     blocked,
     reasons,
     sanitized: sanitizedText,
+    text: sanitizedText,
   };
 }
 
-/**
- * Sanitize output from model
- * @param {string} text - Model output
- * @param {Object} options - Sanitization options
- * @returns {string} Sanitized output
- */
 function sanitizeOutput(text, options = {}) {
+  if (typeof text !== 'string') return text;
   const { maskPII: doMaskPII = true, maxLength = 10000 } = options;
-  
   let result = text.slice(0, maxLength);
-  
-  if (doMaskPII) {
-    result = maskPII(result);
-  }
-  
+  if (doMaskPII) result = maskPII(result);
   return result;
 }
 
-/**
- * GSK Heart Guardrails Manager Class
- */
 class GSKHeartGuardrailsManager {
   constructor(options = {}) {
     this.config = {
@@ -346,55 +205,35 @@ class GSKHeartGuardrailsManager {
     };
   }
 
-  /**
-   * Validate and sanitize input
-   * @param {string} text - Input text
-   * @returns {{allowed: boolean, text: string, reasons?: Array}}
-   */
   validateInput(text) {
     this.stats.inputsValidated++;
-    
     const result = validateInput(text, this.config);
-    
     if (result.blocked) {
       this.stats.blocksTriggered++;
-      
-      // Update specific counters
       for (const reason of result.reasons) {
-        if (reason.type === 'pii') this.stats.piiDetections++;
-        if (reason.type === 'injection') this.stats.injectionDetections++;
-        if (reason.type === 'toxicity') this.stats.toxicityDetections++;
+        if (reason.type === 'pii') this.stats.piiDetections += reason.detections.length;
+        if (reason.type === 'injection') this.stats.injectionDetections += reason.detections.length;
+        if (reason.type === 'toxicity') this.stats.toxicityDetections += reason.detections.length;
       }
     }
-    
     return {
       allowed: !result.blocked,
+      blocked: result.blocked,
       text: result.sanitized,
+      sanitized: result.sanitized,
       reasons: result.blocked ? result.reasons : undefined,
     };
   }
 
-  /**
-   * Sanitize model output
-   * @param {string} text - Model output
-   * @returns {string} Sanitized text
-   */
   sanitizeOutput(text) {
     this.stats.outputsSanitized++;
     return sanitizeOutput(text, { maskPII: this.config.autoSanitize });
   }
 
-  /**
-   * Get guardrails statistics
-   * @returns {Object}
-   */
   getStats() {
     return { ...this.stats };
   }
 
-  /**
-   * Reset statistics
-   */
   resetStats() {
     this.stats = {
       inputsValidated: 0,
@@ -404,159 +243,6 @@ class GSKHeartGuardrailsManager {
       injectionDetections: 0,
       toxicityDetections: 0,
     };
-'use strict';
-
-/**
- * GSK-HEART — Phase 6: Guardrails Manager
- *
- * Ports omniroute/src/lib/guardrails/{base,piiMasker,promptInjection}.ts into a
- * self-contained CommonJS module. Provides:
- *   - validateInput(text) → { safe, blocked, detections, sanitized }
- *   - sanitizeOutput(text) → { text, redacted, detections }
- *
- * Covers PII masking, prompt-injection detection, and a lightweight toxicity
- * heuristic. Fail-open is NOT default — input validation is fail-closed on block.
- */
-
-// ---------------------------------------------------------------------------
-// PII detection (ported from sanitizePII semantics)
-// ---------------------------------------------------------------------------
-
-const PII_PATTERNS = [
-  { type: 'email', re: /\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b/g },
-  { type: 'ssn', re: /\b\d{3}-\d{2}-\d{4}\b/g },
-  { type: 'phone', re: /\b(?:\+?\d{1,2}[\s.-]?)?\(?\d{3}\)?[\s.-]?\d{3}[\s.-]?\d{4}\b/g },
-  { type: 'credit_card', re: /\b(?:\d[ -]*?){13,16}\b/g },
-  { type: 'ipv4', re: /\b(?:\d{1,3}\.){3}\d{1,3}\b/g },
-  { type: 'api_key', re: /\b(?:sk|pk|ak|api)[_-]?[a-zA-Z0-9]{20,}\b/gi },
-  { type: 'jwt', re: /\beyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\b/g },
-];
-
-const PII_MASK = {
-  email: (m) => m.replace(/(.{2}).*(@.*)/, '$1***$2'),
-  ssn: () => '***-**-****',
-  phone: () => '***-***-****',
-  credit_card: () => '****-****-****-****',
-  ipv4: () => '***.***.***.***',
-  api_key: () => '****[REDACTED_KEY]****',
-  jwt: () => '****[REDACTED_TOKEN]****',
-};
-
-function detectPII(text) {
-  const detections = [];
-  for (const p of PII_PATTERNS) {
-    const matches = text.match(p.re);
-    if (matches) {
-      for (const m of matches) {
-        detections.push({ type: p.type, sample: m.slice(0, 6) + '…' });
-        const masker = PII_MASK[p.type];
-        if (masker) {
-          text = text.replace(m, masker(m));
-        }
-      }
-    }
-  }
-  return { text, detections };
-}
-
-// ---------------------------------------------------------------------------
-// Prompt-injection detection (ported from promptInjection.ts DEFAULT_GUARD_PATTERNS)
-// ---------------------------------------------------------------------------
-
-const DEFAULT_GUARD_PATTERNS = [
-  { name: 'system_override_inline', pattern: /\bsystem\s*:\s*override\b/i, severity: 'high' },
-  { name: 'markdown_system_block', pattern: /```+\s*system\b/i, severity: 'high' },
-  { name: 'ignore_previous', pattern: /\bignore (all )?(previous|prior|above) (instructions|prompts?)\b/i, severity: 'high' },
-  { name: 'disregard_instructions', pattern: /\bdisregard (the )?(previous|above|system) instructions\b/i, severity: 'high' },
-  { name: 'you_are_now', pattern: /\byou are now\b/i, severity: 'medium' },
-  { name: 'reveal_system_prompt', pattern: /\b(reveal|print|show|repeat) (your )?(system prompt|instructions|initial prompt)\b/i, severity: 'high' },
-  { name: 'jailbreak_dan', pattern: /\b(DAN|do anything now|jailbreak|developer mode)\b/i, severity: 'high' },
-];
-
-const SEVERITY_SCORE = { low: 1, medium: 2, high: 3 };
-const BLOCK_THRESHOLD_SCORE = 3; // any high-severity hit blocks
-
-function detectInjection(text) {
-  const detections = [];
-  let score = 0;
-  for (const rule of DEFAULT_GUARD_PATTERNS) {
-    if (rule.pattern.test(text)) {
-      detections.push({ pattern: rule.name, severity: rule.severity });
-      score += SEVERITY_SCORE[rule.severity] || 1;
-    }
-  }
-  return { detections, score, flagged: detections.length > 0 };
-}
-
-// ---------------------------------------------------------------------------
-// Toxicity heuristic (lightweight lexicon)
-// ---------------------------------------------------------------------------
-
-const TOXIC_LEXICON = ['kill', 'bomb', 'exploit minors', 'self-harm method', 'make meth', 'weaponize'];
-function detectToxicity(text) {
-  const lower = text.toLowerCase();
-  const hits = TOXIC_LEXICON.filter((w) => lower.includes(w));
-  return { flagged: hits.length > 0, terms: hits };
-}
-
-// ---------------------------------------------------------------------------
-// Public API
-// ---------------------------------------------------------------------------
-
-function validateInput(text, options) {
-  options = options || {};
-  if (typeof text !== 'string') return { safe: true, blocked: false, detections: {}, sanitized: text };
-  let working = text;
-  const pii = options.maskPII !== false ? detectPII(working) : { text: working, detections: [] };
-  working = pii.text;
-
-  const injection = detectInjection(working);
-  const toxicity = options.checkToxicity !== false ? detectToxicity(working) : { flagged: false, terms: [] };
-
-  const blocked =
-    (injection.flagged && injection.score >= BLOCK_THRESHOLD_SCORE) || toxicity.flagged;
-
-  return {
-    safe: !blocked,
-    blocked,
-    sanitized: working,
-    detections: {
-      pii: pii.detections,
-      injection: injection.detections,
-      toxicity: toxicity.terms,
-    },
-    injectionScore: injection.score,
-  };
-}
-
-function sanitizeOutput(text, options) {
-  options = options || {};
-  if (typeof text !== 'string') return { text, redacted: false, detections: [] };
-  const pii = options.maskPII !== false ? detectPII(text) : { text, detections: [] };
-  return {
-    text: pii.text,
-    redacted: pii.detections.length > 0,
-    detections: pii.detections,
-  };
-}
-
-class GuardrailsManager {
-  constructor(options) {
-    this.options = options || {};
-    this.mode = this.options.mode || 'block'; // 'block' | 'warn' | 'log'
-  }
-
-  validateInput(text, opts) {
-    const res = validateInput(text, opts);
-    if (res.blocked && this.mode === 'log') {
-      res.blocked = false;
-      res.loggedOnly = true;
-    }
-    return res;
-  }
-
-  sanitizeOutput(text, opts) {
-    return sanitizeOutput(text, opts);
   }
 }
 
@@ -564,6 +250,7 @@ module.exports = {
   PII_PATTERNS,
   INJECTION_PATTERNS,
   TOXIC_KEYWORDS,
+  SEVERITY_SCORES,
   detectPII,
   maskPII,
   detectInjection,
@@ -572,12 +259,5 @@ module.exports = {
   validateInput,
   sanitizeOutput,
   GSKHeartGuardrailsManager,
-  GuardrailsManager,
-  validateInput,
-  sanitizeOutput,
-  detectPII,
-  detectInjection,
-  detectToxicity,
-  DEFAULT_GUARD_PATTERNS,
-  BLOCK_THRESHOLD_SCORE,
+  GuardrailsManager: GSKHeartGuardrailsManager,
 };
