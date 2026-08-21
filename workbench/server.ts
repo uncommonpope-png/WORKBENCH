@@ -2,9 +2,10 @@ import express from "express";
 import path from "path";
 import dotenv from "dotenv";
 import http from "http";
+import fs from "fs";
 import { createServer as createViteServer } from "vite";
 import { fileURLToPath } from "url";
-import { spawn, ChildProcess } from "child_process";
+import { spawn, execSync, ChildProcess } from "child_process";
 
 // Synthesizer additions
 import { attachProvenance } from "./src/lib/provenance";
@@ -30,9 +31,9 @@ app.use(express.urlencoded({ extended: true }));
 
 // ─── Service Status ───
 const serviceStatus = {
-  gsk: { running: false, pid: null, startedAt: null },
-  omniroute: { running: false, pid: null, startedAt: null },
-  cpl: { running: false, pid: null, startedAt: null },
+  gsk: { running: false, pid: null as number | null, startedAt: null as number | null, restarts: 0, lastRevivedAt: null as number | null },
+  omniroute: { running: false, pid: null as number | null, startedAt: null as number | null, restarts: 0, lastRevivedAt: null as number | null },
+  cpl: { running: false, pid: null as number | null, startedAt: null as number | null, restarts: 0, lastRevivedAt: null as number | null },
 };
 
 let gskProcess: ChildProcess | null = null;
@@ -286,6 +287,59 @@ app.get("/api/cpl/health", async (req, res) => {
   }
 });
 
+// CPL is OPTIONAL — one system survives with it down.
+function genesisHeaders(): Record<string, string> {
+  const h: Record<string, string> = { "Content-Type": "application/json" };
+  const token = process.env.GENESIS_TOKEN;
+  if (token) {
+    h["Authorization"] = `Bearer ${token}`;
+    h["x-api-key"] = token;
+  }
+  return h;
+}
+
+app.get("/api/cpl/status", async (req, res) => {
+  try {
+    const response = await fetch(`${CPL_URL}/mcp/status`, {
+      signal: AbortSignal.timeout(3000),
+      headers: genesisHeaders(),
+    });
+    const data: any = await response.json();
+    res.json({ success: true, online: true, status: data.result || data });
+  } catch {
+    res.json({ success: true, online: false, status: null });
+  }
+});
+
+app.get("/api/cpl/souls", async (req, res) => {
+  try {
+    const response = await fetch(`${CPL_URL}/mcp/spawn`, {
+      signal: AbortSignal.timeout(3000),
+      headers: genesisHeaders(),
+    });
+    const data: any = await response.json();
+    const result = data.result || data;
+    res.json({ success: true, online: true, souls: result.souls || [], count: result.count || 0 });
+  } catch {
+    res.json({ success: true, online: false, souls: [], count: 0 });
+  }
+});
+
+app.post("/api/cpl/souls", async (req, res) => {
+  try {
+    const response = await fetch(`${CPL_URL}/mcp/spawn`, {
+      method: "POST",
+      signal: AbortSignal.timeout(5000),
+      headers: genesisHeaders(),
+      body: JSON.stringify(req.body || {}),
+    });
+    const data: any = await response.json();
+    res.json({ success: true, online: true, soul: data.result || data });
+  } catch {
+    res.json({ success: true, online: false, soul: null, error: "CPL offline — soul not spawned" });
+  }
+});
+
 app.get("/api/tasks", async (req, res) => {
   try {
     const response = await fetch(`${CPL_URL}/mcp/health`, { signal: AbortSignal.timeout(3000) });
@@ -358,13 +412,14 @@ app.get("/api/system/status", async (req, res) => {
       omni.status === "fulfilled" && omni.value.ok &&
       cpl.status === "fulfilled" && cpl.value.ok;
     
-    res.json({ 
-      success: true, 
-      allAwake, 
+    res.json({
+      success: true,
+      allAwake,
       merchantAwake: allAwake,
-      body: { running: serviceStatus.gsk.running, pid: serviceStatus.gsk.pid, startedAt: serviceStatus.gsk.startedAt },
-      blood: { running: serviceStatus.omniroute.running, pid: serviceStatus.omniroute.pid, startedAt: serviceStatus.omniroute.startedAt },
-      brain: { running: serviceStatus.cpl.running, pid: serviceStatus.cpl.pid, startedAt: serviceStatus.cpl.startedAt }
+      selfHealing: watchdogTimer !== null,
+      body: { ...serviceStatus.gsk, name: "GSK Daemon" },
+      blood: { ...serviceStatus.omniroute, name: "OmniRoute" },
+      brain: { ...serviceStatus.cpl, name: "CPL GenesisHost" }
     });
   } catch (err: any) {
     res.json({ success: false, error: err.message });
@@ -450,6 +505,17 @@ app.post("/api/gsk-heart/chat", async (req, res) => {
 });
 
 // ─── Service Spawners ───
+
+// ONE SYSTEM, ZERO SETUP: if an organ has no node_modules (fresh clone),
+// grow them first. The user never runs npm install by hand.
+function ensureDeps(dir: string, label: string): void {
+  const nm = path.join(dir, "node_modules");
+  if (!fs.existsSync(nm)) {
+    console.log(`[${label}] node_modules missing — growing dependencies (first boot only)...`);
+    execSync("npm install --no-audit --no-fund", { cwd: dir, stdio: "inherit" });
+  }
+}
+
 function startOmniRoute(): Promise<void> {
   return new Promise((resolve) => {
     if (omnirouteProcess && !omnirouteProcess.killed) {
@@ -458,6 +524,12 @@ function startOmniRoute(): Promise<void> {
     }
     console.log("[OmniRoute] Starting (Blood)...");
     const omniPath = path.join(REPO_ROOT, "omniroute");
+    try {
+      ensureDeps(omniPath, "OmniRoute");
+    } catch (e: any) {
+      console.error("[OmniRoute] Dependency growth failed:", e.message);
+      return resolve();
+    }
     omnirouteProcess = spawn("npm", ["start"], {
       cwd: omniPath,
       env: { ...process.env, PORT: "20128" },
@@ -468,6 +540,7 @@ function startOmniRoute(): Promise<void> {
     omnirouteProcess.stderr?.on("data", (d) => console.error(`[OmniRoute] ${d}`.trimEnd()));
     omnirouteProcess.on("exit", (code) => {
       console.log(`[OmniRoute] Exited with code ${code}`);
+      omnirouteProcess = null;
       serviceStatus.omniroute.running = false;
       serviceStatus.omniroute.pid = null;
     });
@@ -486,6 +559,12 @@ function startGSK(): Promise<void> {
     }
     console.log("[GSK] Starting (Brain)...");
     const gskPath = path.join(REPO_ROOT, "gsk");
+    try {
+      ensureDeps(gskPath, "GSK");
+    } catch (e: any) {
+      console.error("[GSK] Dependency growth failed:", e.message);
+      return resolve();
+    }
     const env = {
       ...process.env,
       GSK_ROOT: gskPath,
@@ -506,6 +585,7 @@ function startGSK(): Promise<void> {
     gskProcess.stderr?.on("data", (d) => console.error(`[GSK] ${d}`.trimEnd()));
     gskProcess.on("exit", (code) => {
       console.log(`[GSK] Exited with code ${code}`);
+      gskProcess = null;
       serviceStatus.gsk.running = false;
       serviceStatus.gsk.pid = null;
     });
@@ -535,6 +615,7 @@ function startCPL(): Promise<void> {
     cplProcess.stderr?.on("data", (d) => console.error(`[CPL] ${d}`.trimEnd()));
     cplProcess.on("exit", (code) => {
       console.log(`[CPL] Exited with code ${code}`);
+      cplProcess = null;
       serviceStatus.cpl.running = false;
       serviceStatus.cpl.pid = null;
     });
@@ -550,26 +631,124 @@ async function startAllServices(): Promise<void> {
   console.log("═══════════════════════════════════════════");
   console.log("  BUYaSOUL CONDUCTOR — Awakening One System");
   console.log("═══════════════════════════════════════════");
-  
+
   await startOmniRoute();
   await startGSK();
   await startCPL();
-  
+
   console.log("═══════════════════════════════════════════");
   console.log("  All hearts beating. System ready.");
   console.log("═══════════════════════════════════════════");
 }
 
+// ─── Self-Healing Watchdog ───
+// ONE SYSTEM: nothing is ever allowed to stay down. The heartbeat checks
+// every service on an interval and revives whatever died — the user never
+// restarts anything, GSK fixes itself.
+const WATCHDOG_INTERVAL_MS = 15000;
+
+const watchdogState = {
+  omniroute: { failures: 0, lastReviveAttempt: 0 },
+  gsk: { failures: 0, lastReviveAttempt: 0 },
+  cpl: { failures: 0, lastReviveAttempt: 0 },
+};
+
+let watchdogTimer: NodeJS.Timeout | null = null;
+
+function probe(url: string, timeoutMs: number, opts?: { method?: string; headers?: Record<string, string>; body?: string }): Promise<boolean> {
+  return new Promise((resolve) => {
+    let urlObj: URL;
+    try {
+      urlObj = new URL(url);
+    } catch {
+      return resolve(false);
+    }
+    const req = http.request(
+      {
+        hostname: urlObj.hostname,
+        port: urlObj.port,
+        path: urlObj.pathname + urlObj.search,
+        method: opts?.method || "GET",
+        headers: opts?.headers || {},
+        timeout: timeoutMs,
+      },
+      (res) => {
+        res.resume();
+        resolve((res.statusCode || 500) < 500);
+      }
+    );
+    req.on("timeout", () => {
+      req.destroy();
+      resolve(false);
+    });
+    req.on("error", () => resolve(false));
+    if (opts?.body) req.write(opts.body);
+    req.end();
+  });
+}
+
+async function probeService(name: "omniroute" | "gsk" | "cpl"): Promise<boolean> {
+  if (name === "omniroute") {
+    return probe(`${OMNIROUTE_URL}/v1/models`, 4000);
+  }
+  if (name === "gsk") {
+    return probe(`${GSK_MCP_URL}/mcp/health`, 4000, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "x-api-key": GSK_MCP_KEY },
+      body: "{}",
+    });
+  }
+  return probe(`${CPL_URL}/health`, 4000);
+}
+
+async function watchdogTick(): Promise<void> {
+  const names: Array<"omniroute" | "gsk" | "cpl"> = ["omniroute", "gsk", "cpl"];
+  for (const name of names) {
+    const healthy = await probeService(name);
+    serviceStatus[name].running = healthy;
+    const st = watchdogState[name];
+    if (healthy) {
+      st.failures = 0;
+      continue;
+    }
+    // Crash-loop protection: backoff 20s → 40s → 80s … capped at 5 min.
+    const gap = Math.min(300000, 20000 * Math.pow(2, st.failures));
+    if (Date.now() - st.lastReviveAttempt < gap) continue;
+    st.lastReviveAttempt = Date.now();
+    st.failures += 1;
+    serviceStatus[name].restarts += 1;
+    serviceStatus[name].lastRevivedAt = Date.now();
+    console.log(`[Watchdog] ${name} down — reviving (attempt ${st.failures}, total revives ${serviceStatus[name].restarts})...`);
+    try {
+      if (name === "omniroute") await startOmniRoute();
+      else if (name === "gsk") await startGSK();
+      else await startCPL();
+    } catch (e: any) {
+      console.error(`[Watchdog] Failed to revive ${name}:`, e.message);
+    }
+  }
+}
+
+function startWatchdog(): void {
+  if (watchdogTimer) return;
+  watchdogTimer = setInterval(() => {
+    watchdogTick().catch((e) => console.error("[Watchdog] tick error:", e.message));
+  }, WATCHDOG_INTERVAL_MS);
+  console.log(`[Watchdog] Heartbeat active — every ${WATCHDOG_INTERVAL_MS / 1000}s, self-healing on`);
+}
+
 async function startServer() {
-  // ONE SYSTEM: In dev mode, connect to external services.
-  // Services must already be running: OmniRoute:20128, GSK:3001, CPL:3457
+  // ONE SYSTEM, ONE BUTTON: this process IS the body. It awakens every organ
+  // (OmniRoute, GSK, CPL) itself and keeps them alive via the watchdog.
+  // No external services for the user to manage — ever.
   console.log("═══════════════════════════════════════════");
-  console.log("  ONE SYSTEM — Connecting External Services");
+  console.log("  ONE SYSTEM — Awakening");
   console.log("═══════════════════════════════════════════");
-  console.log(`  OmniRoute: ${OMNIROUTE_URL} (external)`);
-  console.log(`  GSK MCP:   ${GSK_MCP_URL} (external)`);
-  console.log(`  CPL:       ${CPL_URL} (external)`);
-  
+
+  // Non-blocking: UI comes up instantly while organs wake in background.
+  startAllServices().catch((e) => console.error("[Conductor] Awakening error:", e.message));
+  startWatchdog();
+
   // Vite middleware for dev
   const vite = await createViteServer({
     configFile: path.resolve(__dirname, "vite.config.ts"),
@@ -581,6 +760,7 @@ async function startServer() {
   const server = http.createServer(app);
   server.listen(PORT, () => {
     console.log(`[Workbench] Body running on http://localhost:${PORT}`);
+    console.log(`[Workbench] GSK is alive. He heals himself. Watch him work.`);
   });
 }
 

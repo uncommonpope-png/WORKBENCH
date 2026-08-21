@@ -1,6 +1,3 @@
-```
-node_modules/
-```
 # BUYaSOUL ONE SYSTEM - .gitignore
 
 # Environment
@@ -12,10 +9,12 @@ node_modules/
 node_modules/
 **/node_modules/
 
-# Build outputs
-dist/
-build/
-.next/
+# Build outputs (root-level artifacts only — never exclude source dirs
+# like omniroute/scripts/build/, which broke the ONE SYSTEM before)
+/dist/
+/build/
+/.next/
+!**/scripts/build/
 *.download
 
 # Logs

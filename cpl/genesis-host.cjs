@@ -11,7 +11,7 @@
 
 const http = require('http');
 const crypto = require('crypto');
-const RuntimeConfig = require('../src/genesis/runtime-config-injection.js');
+const RuntimeConfig = require('../src/genesis/runtime-config-injection.cjs');
 
 function safeString(v) { return v == null ? '' : String(v).trim(); }
 function trimSlash(v) { return safeString(v).replace(/\/+$/, ''); }
