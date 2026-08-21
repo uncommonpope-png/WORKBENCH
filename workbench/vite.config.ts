@@ -10,6 +10,24 @@ export default defineConfig(() => {
       alias: {
         '@': path.resolve(__dirname, '.'),
       },
+      // Single React instance across the whole graph — prevents
+      // "Invalid hook call / more than one copy of React" white screens.
+      dedupe: ['react', 'react-dom'],
+    },
+    optimizeDeps: {
+      // Eagerly bundle ALL runtime deps in ONE pass at server start.
+      // Lazy discovery (e.g. zod found mid-session) splits the graph into
+      // two optimizer generations and duplicates React.
+      include: [
+        'react',
+        'react-dom/client',
+        '@solana/web3.js',
+        'lucide-react',
+        'motion/react',
+        'react-markdown',
+        'three',
+        'zod',
+      ],
     },
     server: {
       // HMR is disabled in AI Studio via DISABLE_HMR env var.

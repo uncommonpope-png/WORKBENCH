@@ -1,36 +1,22 @@
-/**
- * Offline Memory Synthesizer
- * Implements predictive processing top-down priors and precision-weighted residual updates.
- */
+const fs = require('fs');
+const path = require('path');
+
 class OfflineMemorySynthesizer {
-  constructor() {
-    this.priors = new Map();
-    this.episodes = [];
+  constructor(config = {}) {
+    this.storagePath = config.storagePath || path.join(__dirname, '../data/synthesized_memory.json');
+    this.latentBottleneckScoreThreshold = config.threshold || 0.75;
   }
 
-  recordEpisode(episode) {
-    this.episodes.push({
+  async synthesizeLogs(logs = []) {
+    const broadcastable = logs.filter(log => (log.score || 0.5) >= this.latentBottleneckScoreThreshold);
+    const summary = {
       timestamp: Date.now(),
-      prediction: episode.prediction || {},
-      actual: episode.actual || {},
-      weight: episode.weight || 1.0
-    });
-  }
-
-  synthesize() {
-    const results = [];
-    for (const ep of this.episodes) {
-      const predictionError = (ep.actual.score || 0) - (ep.prediction.score || 0);
-      const precisionWeightedUpdate = predictionError * ep.weight;
-      results.push({
-        timestamp: ep.timestamp,
-        predictionError,
-        precisionWeightedUpdate,
-        synthesizedInsight: `Prediction error: ${predictionError.toFixed(4)}, precision update: ${precisionWeightedUpdate.toFixed(4)}`,
-        pltValue: (ep.actual.score || 0) > 0 ? 'PROFIT' : 'TAX'
-      });
-    }
-    return results;
+      state: 'A-CONSCIOUSNESS_GLOBAL_BROADCAST',
+      totalInput: logs.length,
+      consolidatedCount: broadcastable.length,
+      coreInsights: broadcastable.map(item => item.summary || item.detail)
+    };
+    return summary;
   }
 }
 
