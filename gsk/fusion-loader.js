@@ -177,7 +177,7 @@ class GSKFusion {
             let memory = this.memory; // hoisted local binding for downstream init blocks
 
             this._safeInit('plt', () => {
-                const { PLTEngine } = require('../plt-engine.js');
+                const { PLTEngine } = require('./gsk-core/plt-doctrine.js');
                 this.plt = this.core?.plt || new PLTEngine({ archetype: 'ARCHITECT', soulId: 'gsk', dataDir: path.join(this.dataDir, 'plt') });
                 this.systems.plt = this.plt;
                 console.log('  [FUSION] ✓ PLT action scoring active');
