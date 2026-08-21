@@ -33,7 +33,8 @@ export const CombosTab: React.FC<CombosTabProps> = ({ accentColor, skills, provi
       const res = await fetch("/api/soul-economy/catalog");
       if (res.ok) {
         const data = await res.json();
-        const comboItems = data.filter((item: any) => item.type === "combo");
+        const arr: any[] = data.catalog || data.items || (Array.isArray(data) ? data : []);
+        const comboItems = arr.filter((item: any) => item.type === "combo");
         setCombos(comboItems);
       }
     } catch (e) {

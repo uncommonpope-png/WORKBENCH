@@ -5,6 +5,10 @@ import {defineConfig} from 'vite';
 
 export default defineConfig(() => {
   return {
+    define: {
+      'process.env.GSK_MCP_URL': JSON.stringify(process.env.GSK_MCP_URL || 'http://127.0.0.1:3001'),
+      'process.env.MCP_API_KEY': JSON.stringify(process.env.MCP_API_KEY || 'gsk-dev-key'),
+    },
     plugins: [react(), tailwindcss()],
     resolve: {
       alias: {

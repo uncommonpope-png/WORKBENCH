@@ -34,7 +34,8 @@ export const RolesTab: React.FC<RolesTabProps> = ({ accentColor, providerConfig,
       const res = await fetch("/api/soul-economy/catalog");
       if (res.ok) {
         const data = await res.json();
-        const roleItems = data.filter((item: Role) => item.type === "role");
+        const arr: any[] = data.catalog || data.items || (Array.isArray(data) ? data : []);
+        const roleItems = arr.filter((item: Role) => item.type === "role");
         setRoles(roleItems);
       }
     } catch (e) {

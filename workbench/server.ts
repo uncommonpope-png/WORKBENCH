@@ -366,33 +366,62 @@ app.post("/api/tasks/query", async (req, res) => {
 });
 
 // Soul Economy
+function readJsonSafe(p: string): any {
+  try {
+    const raw = fs.readFileSync(p, "utf8");
+    return JSON.parse(raw);
+  } catch {
+    return [];
+  }
+}
+
 app.get("/api/soul-economy/catalog", async (req, res) => {
   try {
-    const catalog = await import("../soul-economy/data/catalog.json", { assert: { type: "json" } });
-    const catalogData = (catalog.default || (catalog as any)) as { items?: any[]; data?: any };
-    res.json({ success: true, catalog: catalogData });
+    const catalog = readJsonSafe(path.join(__dirname, "../soul-economy/data/catalog.json"));
+    const arr = Array.isArray(catalog) ? catalog : (catalog.items || catalog.data || []);
+    res.json({ success: true, catalog: arr, items: arr });
   } catch (err: any) {
-    res.json({ success: false, error: err.message });
+    res.json({ success: false, error: err.message, catalog: [], items: [] });
   }
 });
 
 app.get("/api/soul-economy/items", async (req, res) => {
   try {
-    const catalog = await import("../soul-economy/data/catalog.json", { assert: { type: "json" } });
-    const catalogData = (catalog.default || (catalog as any)) as { items?: any[] };
-    const items = catalogData.items || [];
-    res.json({ success: true, items });
+    const catalog = readJsonSafe(path.join(__dirname, "../soul-economy/data/catalog.json"));
+    const arr = Array.isArray(catalog) ? catalog : (catalog.items || catalog.data || []);
+    res.json({ success: true, items: arr, catalog: arr });
   } catch (err: any) {
-    res.json({ success: false, error: err.message });
+    res.json({ success: false, error: err.message, items: [] });
   }
 });
 
 app.get("/api/soul-economy/transactions", async (req, res) => {
   try {
-    const journal = await import("../soul-economy/data/journal-entries.json", { assert: { type: "json" } });
-    res.json({ success: true, transactions: (journal.default || (journal as any)) });
+    const journal = readJsonSafe(path.join(__dirname, "../soul-economy/data/journal-entries.json"));
+    const arr = Array.isArray(journal) ? journal : (journal.transactions || journal.entries || []);
+    res.json({ success: true, transactions: arr });
   } catch (err: any) {
-    res.json({ success: false, error: err.message });
+    res.json({ success: false, error: err.message, transactions: [] });
+  }
+});
+
+app.get("/api/soul-economy/journal", async (req, res) => {
+  try {
+    const journal = readJsonSafe(path.join(__dirname, "../soul-economy/data/journal-entries.json"));
+    const arr = Array.isArray(journal) ? journal : (journal.entries || journal.transactions || []);
+    res.json({ success: true, entries: arr });
+  } catch (err: any) {
+    res.json({ success: false, error: err.message, entries: [] });
+  }
+});
+
+app.get("/api/gsk/memories", async (req, res) => {
+  try {
+    const response = await gskMCPRequest("/mcp/memories", {}, 10000);
+    const memories = response.memories || response.result?.memories || response.result || [];
+    res.json({ success: true, memories });
+  } catch (err: any) {
+    res.json({ success: false, memories: [], error: err.message });
   }
 });
 
