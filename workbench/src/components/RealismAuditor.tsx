@@ -57,7 +57,20 @@ export const RealismAuditor: React.FC<RealismAuditorProps> = ({
     setLoading(true);
     try {
       const res = await fetch("/api/audit-integrity");
-      const data = await res.json();
+      if (!res.ok) {
+        console.warn("Auditor endpoint not available (HTTP " + res.status + ")");
+        setLoading(false);
+        return;
+      }
+      const text = await res.text();
+      let data: any;
+      try {
+        data = JSON.parse(text);
+      } catch {
+        console.warn("Auditor returned non-JSON (route not implemented yet)");
+        setLoading(false);
+        return;
+      }
       if (data.success) {
         setAudit(data);
       }

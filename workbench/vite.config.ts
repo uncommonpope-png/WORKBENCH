@@ -34,6 +34,13 @@ export default defineConfig(() => {
       ],
     },
     server: {
+      // Force clients to never cache modules — defeats stale-bundle loops
+      // where a browser keeps serving an old build after server restarts.
+      headers: {
+        'Cache-Control': 'no-cache, no-store, must-revalidate, max-age=0',
+        'Pragma': 'no-cache',
+        'Expires': '0',
+      },
       // HMR is disabled in AI Studio via DISABLE_HMR env var.
       // Do not modifyâfile watching is disabled to prevent flickering during agent edits.
       hmr: process.env.DISABLE_HMR !== 'true',

@@ -40,7 +40,18 @@ export const WorkflowIntegration: React.FC<WorkflowIntegrationProps> = ({
             skills: activeSkills,
           }),
         });
-        const data = await res.json();
+        if (!res.ok) {
+          setCompileError("Compile endpoint not available yet (HTTP " + res.status + ")");
+          return;
+        }
+        const text = await res.text();
+        let data: any;
+        try {
+          data = JSON.parse(text);
+        } catch {
+          setCompileError("Server returned non-JSON — compile route not implemented yet");
+          return;
+        }
         if (data.success) {
           setNodeCode(data.node);
           setPythonCode(data.python);
