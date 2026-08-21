@@ -255,7 +255,8 @@ app.post("/api/tasks/query", async (req, res) => {
 app.get("/api/soul-economy/catalog", async (req, res) => {
   try {
     const catalog = await import("../soul-economy/data/catalog.json", { assert: { type: "json" } });
-    res.json({ success: true, catalog: catalog.default || catalog });
+    const catalogData = (catalog.default || (catalog as any)) as { items?: any[]; data?: any };
+    res.json({ success: true, catalog: catalogData });
   } catch (err: any) {
     res.json({ success: false, error: err.message });
   }
@@ -264,7 +265,8 @@ app.get("/api/soul-economy/catalog", async (req, res) => {
 app.get("/api/soul-economy/items", async (req, res) => {
   try {
     const catalog = await import("../soul-economy/data/catalog.json", { assert: { type: "json" } });
-    const items = (catalog.default || catalog).items || [];
+    const catalogData = (catalog.default || (catalog as any)) as { items?: any[] };
+    const items = catalogData.items || [];
     res.json({ success: true, items });
   } catch (err: any) {
     res.json({ success: false, error: err.message });
@@ -274,7 +276,7 @@ app.get("/api/soul-economy/items", async (req, res) => {
 app.get("/api/soul-economy/transactions", async (req, res) => {
   try {
     const journal = await import("../soul-economy/data/journal-entries.json", { assert: { type: "json" } });
-    res.json({ success: true, transactions: journal.default || journal });
+    res.json({ success: true, transactions: (journal.default || (journal as any)) });
   } catch (err: any) {
     res.json({ success: false, error: err.message });
   }

@@ -1,21 +1,23 @@
 import React, { useEffect, useState } from "react";
-import { 
-  Server, 
-  Cpu, 
-  Zap, 
-  Activity, 
-  RefreshCw, 
-  ExternalLink, 
-  CheckCircle, 
-  XCircle, 
+import {
+  Server,
+  Cpu,
+  Zap,
+  Activity,
+  RefreshCw,
+  ExternalLink,
+  CheckCircle,
+  XCircle,
   AlertCircle,
   Settings,
   Database,
   Network,
   Terminal,
   Eye,
-  Monitor
+  Monitor,
+  MessageCircle
 } from "lucide-react";
+import { ProviderConfig } from "../types";
 
 interface Model {
   id: string;
@@ -29,9 +31,10 @@ interface Model {
 
 interface OmniRouteTabProps {
   accentColor: string;
+  providerConfig?: ProviderConfig;
 }
 
-export const OmniRouteTab: React.FC<OmniRouteTabProps> = ({ accentColor }) => {
+export const OmniRouteTab: React.FC<OmniRouteTabProps> = ({ accentColor, providerConfig }) => {
   const [health, setHealth] = useState<any>(null);
   const [models, setModels] = useState<Model[]>([]);
   const [loading, setLoading] = useState(true);

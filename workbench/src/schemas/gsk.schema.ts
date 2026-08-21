@@ -5,7 +5,7 @@ export const GskMemorySchema = z.object({
   content: z.string(),
   type: z.string(),
   timestamp: z.string().optional(),
-  meta: z.record(z.any()).optional()
+  meta: z.record(z.string(), z.any()).optional()
 });
 
 export const GskMemoriesArray = z.array(GskMemorySchema);

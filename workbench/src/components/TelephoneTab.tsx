@@ -18,9 +18,10 @@ import {
   Flag,
   MapPin,
   Heart,
-  Star,
-  XCircle
+   Star,
+   XCircle
 } from "lucide-react";
+import { ProviderConfig } from "../types";
 
 interface GSKNotification {
   id: string;
@@ -34,9 +35,11 @@ interface GSKNotification {
 
 interface TelephoneTabProps {
   accentColor: string;
+  providerConfig?: ProviderConfig;
+  profile?: any;
 }
 
-export const TelephoneTab: React.FC<TelephoneTabProps> = ({ accentColor }) => {
+export const TelephoneTab: React.FC<TelephoneTabProps> = ({ accentColor, providerConfig, profile }) => {
   const [notifications, setNotifications] = useState<GSKNotification[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
   const [gskStatus, setGskStatus] = useState<any>(null);
