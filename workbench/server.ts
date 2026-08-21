@@ -516,6 +516,16 @@ function ensureDeps(dir: string, label: string): void {
   }
 }
 
+// OmniRoute runs its dashboard in production mode; the .build/next artifact
+// must exist. Grow it once on first boot — never again.
+function ensureOmniRouteBuild(dir: string, label: string): void {
+  const buildMarker = path.join(dir, ".build", "next", "BUILD_ID");
+  if (!fs.existsSync(buildMarker)) {
+    console.log(`[${label}] production build missing — forging it (first boot only, takes a few minutes)...`);
+    execSync("npm run build", { cwd: dir, stdio: "inherit" });
+  }
+}
+
 function startOmniRoute(): Promise<void> {
   return new Promise((resolve) => {
     if (omnirouteProcess && !omnirouteProcess.killed) {
@@ -526,8 +536,9 @@ function startOmniRoute(): Promise<void> {
     const omniPath = path.join(REPO_ROOT, "omniroute");
     try {
       ensureDeps(omniPath, "OmniRoute");
+      ensureOmniRouteBuild(omniPath, "OmniRoute");
     } catch (e: any) {
-      console.error("[OmniRoute] Dependency growth failed:", e.message);
+      console.error("[OmniRoute] First-boot growth failed:", e.message);
       return resolve();
     }
     omnirouteProcess = spawn("npm", ["start"], {
