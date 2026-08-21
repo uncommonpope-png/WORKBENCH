@@ -60,6 +60,18 @@ class GSKHeartUnified {
     if (options) Object.assign(this.options, options);
     if (options && options.credentials) this.credentials = { ...this.credentials, ...options.credentials };
     this.initialized = true;
+
+    // Non-blocking: pull OmniRoute's live catalog (346 providers) so the
+    // router decides over real availability. Static catalog stays as fallback.
+    if (typeof this.router.refreshLiveCatalog === 'function') {
+      this.router
+        .refreshLiveCatalog()
+        .then((n) => {
+          if (n > 0) console.log(`[GSK-HEART] Live catalog synced from OmniRoute: ${n} models`);
+        })
+        .catch(() => {});
+    }
+
     return {
       ok: true,
       providers: Object.keys(providers).length,
@@ -71,6 +83,12 @@ class GSKHeartUnified {
 
   _buildProviderChain(selectedModel) {
     const chain = [];
+    // Exact routed model first (e.g. "openai/gpt-4o-mini") so OmniRoute
+    // executes precisely what GSK's router decided.
+    if (typeof selectedModel === 'string' && selectedModel.includes('/')) {
+      const slash = selectedModel.indexOf('/');
+      chain.push({ id: selectedModel.slice(0, slash), defaultModel: selectedModel.slice(slash + 1) });
+    }
     const providerInfo = providers[selectedModel];
     if (providerInfo) {
       chain.push(providerInfo);
@@ -115,6 +133,11 @@ class GSKHeartUnified {
       let routingDecision = null;
 
       if (!selectedModel) {
+        // Ensure the live catalog is present before the first routing decision
+        // (initialize() refreshes it non-blocking; this closes the race).
+        if (this.router.liveProviderIds && this.router.liveProviderIds.size === 0 && typeof this.router.refreshLiveCatalog === 'function') {
+          await this.router.refreshLiveCatalog();
+        }
         routingDecision = await this.router.route({ prompt: inputText }, options.routing || {});
         if (!routingDecision || !routingDecision.model) {
           return { success: false, error: 'No suitable model found for request' };
@@ -159,6 +182,7 @@ class GSKHeartUnified {
         provider: result.provider,
         usage: result.usage,
         routing: routingDecision,
+        viaOmniRoute: result.viaOmniRoute === true,
         stream,
       };
     } catch (e) {
@@ -176,7 +200,12 @@ class GSKHeartUnified {
       }
     }
 
-    const routingResult = this.router.route(text, request || {});
+    let routingResult = null;
+    try {
+      routingResult = await this.router.route(text, request || {});
+    } catch (e) {
+      routingResult = null;
+    }
     const model = (routingResult && routingResult.model) || (request && request.model) || 'auto/best-chat';
 
     try {

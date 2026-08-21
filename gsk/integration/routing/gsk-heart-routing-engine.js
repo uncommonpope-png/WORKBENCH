@@ -225,6 +225,40 @@ class GSKHeartRouter {
       latency: 0.3,
       cost: 0.2,
     };
+    // Live provider ids refreshed from OmniRoute /v1/models (346 providers).
+    // Static provider-catalog remains the offline fallback.
+    this.liveProviderIds = new Set();
+    this.liveCatalogRefreshedAt = null;
+    this.omnirouteUrl =
+      options.omnirouteUrl ||
+      process.env.NINE_ROUTER_URL ||
+      process.env.OMNIROUTE_URL ||
+      'http://127.0.0.1:20128';
+  }
+
+  /**
+   * Refresh candidate models from OmniRoute's live catalog.
+   * Non-fatal: on failure we keep serving the static catalog.
+   * @returns {Promise<number>} number of live model ids loaded
+   */
+  async refreshLiveCatalog() {
+    try {
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), 3000);
+      const res = await fetch(this.omnirouteUrl + '/v1/models', { signal: controller.signal });
+      clearTimeout(timer);
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+      const body = await res.json();
+      const models = Array.isArray(body && body.data) ? body.data : [];
+      for (const m of models) {
+        if (m && typeof m.id === 'string') this.liveProviderIds.add(m.id);
+      }
+      this.liveCatalogRefreshedAt = new Date().toISOString();
+      return this.liveProviderIds.size;
+    } catch (e) {
+      // OmniRoute down or slow — static catalog still valid.
+      return this.liveProviderIds.size;
+    }
   }
 
   /**
@@ -319,14 +353,21 @@ class GSKHeartRouter {
    */
   async route(prompt, options = {}) {
     const { preferredProviders = [], maxCost = Infinity, maxLatency = Infinity } = options;
-    
-    // Get available providers from catalog
-    const allProviders = Object.keys(providerCatalog.providers || {});
-    
+
+    // Candidates: live OmniRoute catalog (346 providers) merged with static catalog.
+    const staticProviders = Object.keys(providerCatalog.providers || {});
+    const allProviders = [...new Set([...this.liveProviderIds, ...staticProviders])];
+
     // Filter by preferences
     let candidates = preferredProviders.length > 0
       ? allProviders.filter(p => preferredProviders.includes(p))
       : allProviders;
+
+    // Prefer executable "provider/model" ids (live OmniRoute catalog) over
+    // bare provider ids from the static catalog — only the former can be
+    // sent directly to /v1/chat/completions.
+    const executable = candidates.filter((c) => c.includes('/'));
+    if (executable.length > 0) candidates = executable;
 
     // Apply cost/latency constraints based on historical data
     candidates = candidates.filter(modelId => {
@@ -354,6 +395,8 @@ class GSKHeartRouter {
       provider: providerInfo?.id || bestModel,
       confidence: metrics ? metrics.aiq / 100 : 0.5,
       metrics: metrics,
+      source: this.liveProviderIds.has(bestModel) ? 'omniroute-live' : 'static-catalog',
+      liveCatalogRefreshedAt: this.liveCatalogRefreshedAt,
     };
   }
 

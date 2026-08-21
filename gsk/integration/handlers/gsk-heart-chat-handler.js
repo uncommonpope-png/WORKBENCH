@@ -3,13 +3,21 @@
 /**
  * GSK-HEART Chat Handler
  *
- * Implements streaming + non-streaming chat completions via native provider HTTP.
- * Replaces the external OmniRoute /v1/chat/completions dependency.
+ * Architecture: GSK decides, OmniRoute executes.
+ *
+ * Primary path  : POST ${OMNIROUTE_URL}/v1/chat/completions (OpenAI-compatible SSE).
+ *                 OmniRoute supplies 346 providers, RTK/Caveman compression,
+ *                 quota-aware fallback tiers — no per-provider code here.
+ * Fallback path : Native provider HTTP (below) ONLY when OmniRoute is
+ *                 unreachable, so GSK's heart keeps beating standalone.
  */
 
 const http = require('http');
 const https = require('https');
 const { URL } = require('url');
+
+const OMNIROUTE_URL = process.env.NINE_ROUTER_URL || process.env.OMNIROUTE_URL || 'http://127.0.0.1:20128';
+const OMNIROUTE_API_KEY = process.env.NINE_ROUTER_API_KEY || '';
 
 const PROVIDER_BASE = {
   openai: 'https://api.openai.com/v1/chat/completions',
@@ -455,7 +463,117 @@ async function executeChatStream(options) {
 }
 
 // ---------------------------------------------------------------------------
-// Execute with retry and fallback chain
+// PRIMARY PATH — OmniRoute execution (GSK decides, OmniRoute executes)
+// ---------------------------------------------------------------------------
+
+function omniRouteModel(provider) {
+  if (!provider) return '';
+  const dm = provider.defaultModel ? String(provider.defaultModel) : '';
+  const id = provider.id ? String(provider.id) : '';
+  if (dm && dm.includes('/')) return dm;
+  if (dm) return id ? id + '/' + dm : dm;
+  return id; // bare provider id — OmniRoute resolves its default model
+}
+
+/**
+ * Streams a chat completion through OmniRoute's OpenAI-compatible endpoint.
+ * Resolves { viaOmniRoute: true, ... } on success, { unreachable: true } when
+ * OmniRoute itself cannot be reached (connection-level failure), or
+ * { success: false, error } for request-level failures.
+ */
+function executeViaOmniRoute(options) {
+  const { model, messages, timeout = 60000, onChunk } = options;
+  if (!model) return Promise.resolve({ success: false, error: 'No model specified' });
+
+  let parsedUrl;
+  try {
+    parsedUrl = new URL(OMNIROUTE_URL + '/v1/chat/completions');
+  } catch (e) {
+    return Promise.resolve({ unreachable: true, error: 'Bad OMNIROUTE_URL: ' + OMNIROUTE_URL });
+  }
+
+  const headers = { 'Content-Type': 'application/json', Accept: 'text/event-stream' };
+  if (OMNIROUTE_API_KEY) headers['Authorization'] = 'Bearer ' + OMNIROUTE_API_KEY;
+
+  const isHttps = parsedUrl.protocol === 'https:';
+  const lib = isHttps ? https : http;
+
+  return new Promise((resolve) => {
+    let accumulatedContent = '';
+    let usage = null;
+    let settled = false;
+    const done = (r) => { if (!settled) { settled = true; resolve(r); } };
+
+    const req = lib.request(
+      {
+        hostname: parsedUrl.hostname,
+        port: parsedUrl.port || (isHttps ? 443 : 80),
+        path: parsedUrl.pathname + parsedUrl.search,
+        method: 'POST',
+        headers: headers,
+        timeout: timeout,
+      },
+      (res) => {
+        if (res.statusCode !== 200) {
+          let errorBody = '';
+          res.on('data', (c) => { errorBody += c; });
+          res.on('end', () => {
+            // 4xx/5xx from OmniRoute means it answered — do not mark unreachable.
+            done({ success: false, error: 'OmniRoute HTTP ' + res.statusCode + ': ' + errorBody.slice(0, 200), statusCode: res.statusCode });
+          });
+          return;
+        }
+
+        let buffer = '';
+        res.on('data', (chunk) => {
+          buffer += chunk.toString();
+          const lines = buffer.split('\n');
+          buffer = lines.pop() || '';
+          for (const line of lines) {
+            const trimmed = line.trim();
+            if (!trimmed || trimmed.startsWith(':')) continue;
+            if (!trimmed.startsWith('data: ')) continue;
+            const data = trimmed.slice(6);
+            if (data === '[DONE]') { done({ success: true, content: accumulatedContent, usage: usage, viaOmniRoute: true }); return; }
+            try {
+              const parsed = JSON.parse(data);
+              if (parsed.error) { done({ success: false, error: parsed.error.message || 'OmniRoute stream error', viaOmniRoute: true }); return; }
+              const delta = parsed.choices && parsed.choices[0] && parsed.choices[0].delta;
+              if (delta && delta.content) {
+                accumulatedContent += delta.content;
+                if (onChunk) onChunk({ content: delta.content, done: false });
+              }
+              if (parsed.usage) usage = parsed.usage;
+              const fr = parsed.choices && parsed.choices[0] && parsed.choices[0].finish_reason;
+              if (fr) { done({ success: true, content: accumulatedContent, usage: usage, viaOmniRoute: true }); return; }
+            } catch (e) { /* partial JSON line — ignore */ }
+          }
+        });
+
+        res.on('error', (err) => done({ success: false, error: 'Stream error: ' + err.message }));
+        res.on('end', () => {
+          if (accumulatedContent) done({ success: true, content: accumulatedContent, usage: usage, viaOmniRoute: true });
+          else done({ success: false, error: 'Stream ended without content' });
+        });
+      }
+    );
+
+    req.on('error', (err) => {
+      // Connection refused / socket errors => OmniRoute not running.
+      done({ unreachable: true, error: 'OmniRoute unreachable: ' + err.message });
+    });
+    req.on('timeout', () => {
+      req.destroy();
+      done({ success: false, error: 'OmniRoute timed out after ' + timeout + 'ms' });
+    });
+
+    req.write(JSON.stringify({ model: model, messages: messages, stream: true, stream_options: { include_usage: true } }));
+    req.end();
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Fallback chain — OmniRoute first, native provider HTTP as last resort
 // ---------------------------------------------------------------------------
 
 async function executeWithFallback(options) {
@@ -466,16 +584,18 @@ async function executeWithFallback(options) {
   }
 
   const results = [];
+  let omniRouteReachable = true;
 
-  for (let i = 0; i < providerChain.length; i++) {
+  // TIER 1: every candidate model through OmniRoute (compression + quota tiers free)
+  for (let i = 0; i < providerChain.length && omniRouteReachable; i++) {
     const provider = providerChain[i];
-    const model = provider.defaultModel || provider.id;
-    console.log('[GSK-HEART] Attempting provider ' + (i + 1) + '/' + providerChain.length + ': ' + provider.id);
+    const model = omniRouteModel(provider);
+    if (!model) continue;
+    console.log('[GSK-HEART] OmniRoute attempt ' + (i + 1) + '/' + providerChain.length + ': ' + model);
 
-    const result = await executeChatStream({
+    const result = await executeViaOmniRoute({
       model: model,
       messages: messages,
-      provider: provider,
       timeout: provider.timeout || 60000,
       onChunk: i === 0 ? onChunk : null,
     });
@@ -488,17 +608,53 @@ async function executeWithFallback(options) {
         provider: provider.id,
         usage: result.usage,
         attempts: i + 1,
+        viaOmniRoute: true,
       };
     }
 
-    results.push({ provider: provider.id, error: result.error });
+    results.push({ provider: provider.id, via: 'omniroute', error: result.error });
+    if (result.unreachable) {
+      omniRouteReachable = false;
+      console.warn('[GSK-HEART] OmniRoute unreachable — falling back to native provider HTTP');
+      break;
+    }
+    console.warn('[GSK-HEART] OmniRoute rejected ' + model + ': ' + result.error);
+  }
+
+  // TIER 2 (last resort): direct provider HTTP so GSK survives standalone
+  for (let i = 0; i < providerChain.length; i++) {
+    const provider = providerChain[i];
+    const model = provider.defaultModel || provider.id;
+    console.log('[GSK-HEART] Native attempt ' + (i + 1) + '/' + providerChain.length + ': ' + provider.id);
+
+    const result = await executeChatStream({
+      model: model,
+      messages: messages,
+      provider: provider,
+      timeout: provider.timeout || 60000,
+      onChunk: null,
+    });
+
+    if (result.success) {
+      return {
+        success: true,
+        content: result.content,
+        model: model,
+        provider: provider.id,
+        usage: result.usage,
+        attempts: i + 1,
+        viaOmniRoute: false,
+      };
+    }
+
+    results.push({ provider: provider.id, via: 'native', error: result.error });
     console.warn('[GSK-HEART] Provider ' + provider.id + ' failed: ' + result.error);
   }
 
   return {
     success: false,
     error: 'All ' + providerChain.length + ' providers failed',
-    attempts: providerChain.length,
+    attempts: providerChain.length * 2,
     failures: results,
   };
 }
@@ -546,7 +702,19 @@ class GSKHeartChatHandler {
     ];
 
     let providerChain = options.providerChain;
-    if (!providerChain) providerChain = [];
+    if (!providerChain || providerChain.length === 0) {
+      // Synthesize a chain: explicit model first, else OmniRoute auto-routing.
+      providerChain = [];
+      if (typeof model === 'string' && model.length > 0) {
+        const slash = model.indexOf('/');
+        providerChain.push({
+          id: slash > 0 ? model.slice(0, slash) : model,
+          defaultModel: slash > 0 ? model.slice(slash + 1) : undefined,
+        });
+      } else {
+        providerChain.push({ id: 'auto', defaultModel: 'best-chat' });
+      }
+    }
 
     const result = await executeWithFallback({
       providerChain: providerChain,
@@ -571,6 +739,7 @@ class GSKHeartChatHandler {
 }
 
 module.exports = {
+  executeViaOmniRoute,
   executeChatStream,
   executeWithFallback,
   estimateTokens,
@@ -581,6 +750,8 @@ module.exports = {
   resolveProviderId,
   resolveModelName,
   resolveEndpoint,
+  omniRouteModel,
+  OMNIROUTE_URL,
   sseDelta,
   sseDone,
   sseError,
