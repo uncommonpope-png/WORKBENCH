@@ -18,6 +18,8 @@ import { ProfitPrimeTab } from "./components/ProfitPrimeTab";
 import { RolesTab } from "./components/RolesTab";
 import { JournalTab } from "./components/JournalTab";
 import { CombosTab } from "./components/CombosTab";
+import { OmniRouteTab } from "./components/OmniRouteTab";
+import { TelephoneTab } from "./components/TelephoneTab";
 import { 
   Plus, 
   Check, 
@@ -48,8 +50,9 @@ import {
   Target,
   Sparkles,
   Crown,
-  Gem
-} from "lucide-react";
+   Gem,
+   Phone
+ } from "lucide-react";
 
 export default function App() {
   // Master state definitions
@@ -71,7 +74,7 @@ export default function App() {
   });
 
   const [skills, setSkills] = useState<Skill[]>(INITIAL_SKILLS);
-  const [activeTab, setActiveTab] = useState<"capabilities" | "profile" | "skills" | "simulation" | "integrations" | "realism" | "vault" | "habitat" | "marketplace" | "transactions" | "profitPrime" | "roles" | "journal" | "combos">("capabilities");
+  const [activeTab, setActiveTab] = useState<"capabilities" | "profile" | "skills" | "simulation" | "integrations" | "realism" | "vault" | "habitat" | "marketplace" | "transactions" | "profitPrime" | "roles" | "journal" | "combos" | "omniroute" | "telephone">("capabilities");
   const [strictRealismMode, setStrictRealismMode] = useState<boolean>(false);
   const [isExportModalOpen, setIsExportModalOpen] = useState<boolean>(false);
   const [copiedConfig, setCopiedConfig] = useState<boolean>(false);
@@ -514,6 +517,38 @@ export default function App() {
             Combos
           </button>
 
+          <button
+            onClick={() => setActiveTab("omniroute")}
+            className={`flex items-center gap-2 px-4 py-2 border rounded-xl text-xs font-mono tracking-wider uppercase transition-all duration-300 whitespace-nowrap cursor-pointer hover:scale-[1.03] active:scale-95 ${
+              activeTab === "omniroute"
+                ? "bg-slate-950 text-white font-bold border-slate-650"
+                : "border-transparent text-slate-400 hover:text-slate-200 hover:bg-slate-800/30"
+            }`}
+            style={{
+              borderColor: activeTab === "omniroute" ? profile.avatarColor : undefined,
+              boxShadow: activeTab === "omniroute" ? `0 0 16px ${profile.avatarColor}25, inset 0 0 8px ${profile.avatarColor}10` : undefined,
+            }}
+          >
+            <Network className="w-4 h-4" style={{ color: profile.avatarColor }} />
+            10. OmniRoute Models
+          </button>
+
+          <button
+            onClick={() => setActiveTab("telephone")}
+            className={`flex items-center gap-2 px-4 py-2 border rounded-xl text-xs font-mono tracking-wider uppercase transition-all duration-300 whitespace-nowrap cursor-pointer hover:scale-[1.03] active:scale-95 ${
+              activeTab === "telephone"
+                ? "bg-slate-950 text-white font-bold border-slate-650"
+                : "border-transparent text-slate-400 hover:text-slate-200 hover:bg-slate-800/30"
+            }`}
+            style={{
+              borderColor: activeTab === "telephone" ? profile.avatarColor : undefined,
+              boxShadow: activeTab === "telephone" ? `0 0 16px ${profile.avatarColor}25, inset 0 0 8px ${profile.avatarColor}10` : undefined,
+            }}
+          >
+            <Phone className="w-4 h-4" style={{ color: profile.avatarColor }} />
+            11. GSK Telephone
+          </button>
+
         </div>
 
         <div>
@@ -758,6 +793,25 @@ export default function App() {
               accentColor={profile.avatarColor}
               skills={skills}
               providerConfig={providerConfig}
+            />
+          </div>
+        )}
+
+        {activeTab === "omniroute" && (
+          <div className="flex-1">
+            <OmniRouteTab
+              accentColor={profile.avatarColor}
+              providerConfig={providerConfig}
+            />
+          </div>
+        )}
+
+        {activeTab === "telephone" && (
+          <div className="flex-1">
+            <TelephoneTab
+              accentColor={profile.avatarColor}
+              providerConfig={providerConfig}
+              profile={profile}
             />
           </div>
         )}
