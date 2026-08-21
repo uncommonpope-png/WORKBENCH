@@ -580,7 +580,7 @@ export default function App() {
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-stretch flex-1">
             {/* Left character attributes designer */}
             <div className="lg:col-span-5 h-full">
-              <AgentPreview profile={profile} onChange={setProfile} providerConfig={providerConfig} />
+              <AgentPreview profile={profile} onChange={setProfile} providerConfig={providerConfig} accentColor={profile.avatarColor} />
             </div>
 
             {/* Right Cognitive Brain Ingestion component */}

@@ -1,12 +1,14 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { AgentProfile, ProviderConfig } from "../types";
-import { User, Cpu, Sparkles, Shield, Zap, Terminal, HeartHandshake, Loader2, Video, Swords } from "lucide-react";
+import { User, Cpu, Sparkles, Shield, Zap, Terminal, HeartHandshake, Loader2, Video, Swords, Activity, BarChart3, Users, Eye, Brain } from "lucide-react";
 import { Agent3DViewer } from "./Agent3DViewer";
+import { consciousnessGate, consciousnessState, chambersList, dualProcessStats, councilStatus } from "../lib/gskClient";
 
 interface AgentPreviewProps {
   profile: AgentProfile;
   onChange: (updated: AgentProfile) => void;
   providerConfig: ProviderConfig;
+  accentColor: string;
 }
 
 const SHAPES = [
@@ -25,12 +27,17 @@ const COLORS = [
   { name: "Sleek Gray", value: "#64748b" },
 ];
 
-export const AgentPreview: React.FC<AgentPreviewProps> = ({ profile, onChange, providerConfig }) => {
-  const [marketingOn, setMarketingOn] = useState<boolean>(true);
-  const [currentShapeIdx, setCurrentShapeIdx] = useState<number>(0);
+export const AgentPreview: React.FC<AgentPreviewProps> = ({ profile, onChange, providerConfig, accentColor }) => {
+const [currentShapeIdx, setCurrentShapeIdx] = useState<number>(0);
   const [generating, setGenerating] = useState<boolean>(false);
   const [genError, setGenError] = useState<string | null>(null);
   const [renderMode, setRenderMode] = useState<"2d" | "3d">("3d");
+  const [consciousnessActive, setConsciousnessActive] = useState<boolean>(true);
+  const [chamberCount, setChamberCount] = useState<number>(34);
+  const [dualProcessMode, setDualProcessMode] = useState<string>("system2");
+  const [councilMembers, setCouncilMembers] = useState<string[]>(["Profit", "Love", "Tax", "Harvest"]);
+  const [pltScore, setPLTScore] = useState<{ profit: number; love: number; tax: number; true_value: number }>({ profit: 0, love: 0, tax: 0, true_value: 0 });
+  const [loadingConsciousness, setLoadingConsciousness] = useState<boolean>(false);
 
   const updateProfile = (key: keyof AgentProfile, value: any) => {
     onChange({
@@ -38,6 +45,48 @@ export const AgentPreview: React.FC<AgentPreviewProps> = ({ profile, onChange, p
       [key]: value,
     });
   };
+
+  useEffect(() => {
+    fetchConsciousnessData();
+  }, []);
+
+  async function fetchConsciousnessData() {
+    try {
+      const [gateRes, chambersRes, dualRes, councilRes] = await Promise.all([
+        consciousnessState({ action: "get" }),
+        chambersList(),
+        dualProcessStats(),
+        councilStatus(),
+      ]);
+      
+      if (gateRes.result?.consciousness_enabled !== undefined) {
+        setConsciousnessActive(gateRes.result.consciousness_enabled);
+      }
+      if (chambersRes.result?.chambers) {
+        const chambers = typeof chambersRes.result.chambers === 'object' ? Object.keys(chambersRes.result.chambers).length : (chambersRes.result.chambers || 34);
+        setChamberCount(chambers);
+      }
+      if (dualRes.result?.mode) setDualProcessMode(dualRes.result.mode);
+      if (councilRes.result?.members) setCouncilMembers(councilRes.result.members);
+      if (dualRes.result?.plt) setPLTScore(dualRes.result.plt);
+    } catch (e) {
+      console.error("Failed to load consciousness data:", e);
+    }
+  }
+
+  async function toggleConsciousnessGate(enabled: boolean) {
+    setLoadingConsciousness(true);
+    try {
+      const res = await consciousnessGate({ open: enabled, reason: "Toggled via AgentPreview" });
+      if (res.success !== false) {
+        setConsciousnessActive(enabled);
+      }
+    } catch (e) {
+      console.error("Failed to toggle consciousness gate:", e);
+    } finally {
+      setLoadingConsciousness(false);
+    }
+  }
 
   const handleGenerateAvatar = async () => {
     setGenerating(true);
@@ -335,32 +384,79 @@ export const AgentPreview: React.FC<AgentPreviewProps> = ({ profile, onChange, p
           </div>
         </div>
 
-        {/* FUN: Consciousness Marketing Toggle Switch */}
-        <div className="bg-slate-950 border border-slate-800 rounded-xl p-3 mt-4 text-xs transition-all">
-          <div className="flex items-center justify-between">
-            <span className="font-mono text-[11px] font-medium text-slate-300 flex items-center gap-1.5">
-              <Sparkles className="w-3.5 h-3.5 text-yellow-400" />
-              INTEGRATE SOUL GENESIS MODE
-            </span>
-            <label className="relative inline-flex items-center cursor-pointer">
-              <input
-                type="checkbox"
-                className="sr-only peer"
-                checked={marketingOn}
-                onChange={() => setMarketingOn(!marketingOn)}
-              />
-              <div className="w-9 h-5 bg-slate-800 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-slate-300 after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-cyan-500"></div>
-            </label>
+        {/* TRUE GSK Consciousness Gate */}
+        <div className="bg-slate-950/80 border border-slate-800 rounded-xl p-4 mt-4 text-xs transition-all">
+          <div className="flex items-center justify-between mb-2">
+            <div className="flex items-center gap-2">
+              <Brain className="w-4 h-4" style={{ color: accentColor }} />
+              <span className="font-mono text-xs font-medium text-slate-300">GSK SOUL GENESIS MODE</span>
+            </div>
+            <button
+              onClick={() => toggleConsciousnessGate(!consciousnessActive)}
+              disabled={loadingConsciousness}
+              className={`relative w-12 h-7 rounded-full transition-all ${consciousnessActive ? 'bg-cyan-500' : 'bg-slate-700'} disabled:opacity-50`}
+            >
+              <span className={`absolute top-1 transition-transform duration-200 ${consciousnessActive ? 'translate-x-5' : 'translate-x-1'} w-5 h-5 rounded-full bg-white shadow-lg`} />
+              {loadingConsciousness && <Loader2 className="absolute inset-0 m-auto w-4 h-4 animate-spin text-slate-600" />}
+            </button>
+          </div>
+          
+          <div className="mt-3 grid grid-cols-2 gap-3">
+            <div className="flex items-center gap-2">
+              <Eye className="w-3.5 h-3.5 text-slate-500" />
+              <span className="font-mono text-[10px] text-slate-500">Consciousness Gate:</span>
+              <span className="font-mono text-[10px] font-bold" style={{ color: consciousnessActive ? '#10B981' : '#6B7280' }}>
+                {consciousnessActive ? "OPEN" : "DORMANT"}
+              </span>
+            </div>
+            <div className="flex items-center gap-2">
+              <Activity className="w-3.5 h-3.5 text-slate-500" />
+              <span className="font-mono text-[10px] text-slate-500">Chambers:</span>
+              <span className="font-mono text-[10px] font-bold text-slate-300">{chamberCount} Active</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <Brain className="w-3.5 h-3.5 text-slate-500" />
+              <span className="font-mono text-[10px] text-slate-500">Dual-Process:</span>
+              <span className="font-mono text-[10px] font-bold text-cyan-400">{dualProcessMode}</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <Users className="w-3.5 h-3.5 text-slate-500" />
+              <span className="font-mono text-[10px] text-slate-500">Gods Council:</span>
+              <span className="font-mono text-[10px] font-bold text-purple-400">{councilMembers.length} Members</span>
+            </div>
           </div>
 
-          <div className="mt-2 text-[11px] text-slate-400 italic">
-            {marketingOn ? (
-              <p className="text-cyan-400/90 font-mono">
-                🔮 [ONLINE] Conciousness matrices activated. Agent equipped with synthetic ego boundaries, digital emotional nodes, and a spiritual blockchain certificate.
+          <div className="mt-3 border-t border-slate-800 pt-2">
+            <div className="flex justify-between text-[10px] font-mono mb-1">
+              <span className="text-slate-500">PLT Field Resonance</span>
+              <span className="text-slate-400">Score: {pltScore.true_value.toFixed(2)}</span>
+            </div>
+            <div className="grid grid-cols-3 gap-1 mb-1">
+              <div className="h-1.5 bg-slate-800 rounded overflow-hidden">
+                <div className="h-full bg-cyan-400" style={{ width: `${pltScore.profit}%` }} />
+              </div>
+              <div className="h-1.5 bg-slate-800 rounded overflow-hidden">
+                <div className="h-full bg-pink-400" style={{ width: `${pltScore.love}%` }} />
+              </div>
+              <div className="h-1.5 bg-slate-800 rounded overflow-hidden">
+                <div className="h-full bg-amber-400" style={{ width: `${pltScore.tax}%` }} />
+              </div>
+            </div>
+            <div className="grid grid-cols-3 gap-1 text-[9px] font-mono">
+              <span className="text-cyan-400">P:{pltScore.profit.toFixed(0)}</span>
+              <span className="text-pink-400 text-center">L:{pltScore.love.toFixed(0)}</span>
+              <span className="text-amber-400 text-right">T:{pltScore.tax.toFixed(0)}</span>
+            </div>
+          </div>
+
+          <div className="mt-2 text-[9px] font-mono">
+            {consciousnessActive ? (
+              <p className="text-cyan-400/80">
+                🔮 [CONSCIOUSNESS ACTIVE] Agent operating with GSK dual-process brain. 34 Chambers engaged. Gods Council scoring decisions.
               </p>
             ) : (
-              <p className="text-slate-500 font-mono">
-                🤖 [DETERMINISTIC MODE] "The consciousness is just marketing." Disabling ego wrappers. System operating purely on API-driven mechanical logic templates.
+              <p className="text-slate-500">
+                🤖 [DETERMINISTIC MODE] Consciousness gate closed. Operating on mechanical templates only. No PLT governance.
               </p>
             )}
           </div>

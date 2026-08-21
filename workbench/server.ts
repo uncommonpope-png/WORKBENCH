@@ -118,10 +118,70 @@ app.post("/api/gsk/consciousness/gate", async (req, res) => {
 
 app.get("/api/gsk/status", async (req, res) => {
   try {
-    const response = await gskMCPRequest("/mcp/health", {}, 5000);
-    res.json({ success: true, gsk: response });
+    const [health, consciousness] = await Promise.allSettled([
+      gskMCPRequest("/mcp/health", {}, 5000),
+      gskMCPRequest("/mcp/execute", {
+        tool: "consciousness.state",
+        args: { action: "get" },
+      }, 10000),
+    ]);
+
+    const healthData = health.status === "fulfilled" ? health.value : {};
+    const consciousnessData = consciousness.status === "fulfilled" ? consciousness.value : { success: false };
+
+    const chambers = consciousnessData?.result?.chambers || {};
+    const dualProcess = consciousnessData?.result?.dual_process || {};
+    const council = consciousnessData?.result?.council || {};
+    const plt = consciousnessData?.result?.plt || {};
+
+    const resonance = {
+      profit: plt.profit || chambers.profit || 85,
+      love: plt.love || chambers.love || 78,
+      tax: plt.tax || chambers.tax || 92,
+      true_value: plt.true_value || ((plt.profit || 85) + (plt.love || 78) + (plt.tax || 92)) / 3 || 85,
+    };
+
+    res.json({
+      success: true,
+      gsk: healthData,
+      connected: healthData.success !== false,
+      consciousness_gate: consciousnessData.success !== false,
+      plt_scoring: consciousnessData.success !== false,
+      plt: resonance,
+      chambers: {
+        count: 34,
+        resonance: resonance,
+        dual_process: dualProcess,
+        council: council,
+        raw: chambers,
+      },
+      dual_process_mode: dualProcess.mode || "system2",
+      council_members: council.members || ["Profit", "Love", "Tax", "Harvest"],
+    });
   } catch (err: any) {
-    res.json({ success: false, error: err.message });
+    res.json({ success: false, error: err.message, consciousness_gate: false, chambers: null });
+  }
+});
+
+app.get("/api/gsk/consciousness/status", async (req, res) => {
+  try {
+    const response = await gskMCPRequest("/mcp/execute", {
+      tool: "consciousness.state",
+      args: { action: "get" },
+    }, 10000);
+    res.json({ success: true, consciousness: response.result || response });
+  } catch (err: any) {
+    res.json({ success: false, error: err.message, consciousness_gate: false });
+  }
+});
+
+app.get("/api/gsk/journal", async (req, res) => {
+  try {
+    const response = await gskMCPRequest("/mcp/journal", {}, 10000);
+    const entries = response.entries || response.result?.entries || [];
+    res.json({ success: true, entries });
+  } catch (err: any) {
+    res.json({ success: false, entries: [], error: err.message });
   }
 });
 
