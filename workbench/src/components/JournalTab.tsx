@@ -144,9 +144,9 @@ export const JournalTab: React.FC<JournalTabProps> = ({ accentColor, providerCon
   };
 
   return (
-    <div className="flex flex-col h-full gap-6">
+    <div className="bg-slate-900/60 border border-slate-800/80 backdrop-blur-md rounded-2xl p-6 shadow-2xl relative overflow-hidden text-slate-100 flex flex-col h-full gap-6 hover:border-pink-500/20 transition-all">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 p-4 bg-slate-900/50 border border-slate-800 rounded-2xl">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 p-4 bg-slate-950/50 border border-slate-800/60 rounded-2xl">
         <div className="flex items-center gap-4">
           <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-purple-500/20 to-slate-950 border flex items-center justify-center" style={{ borderColor: accentColor }}>
             <ScrollText className="w-6 h-6" style={{ color: accentColor }} />
@@ -173,7 +173,7 @@ export const JournalTab: React.FC<JournalTabProps> = ({ accentColor, providerCon
       </div>
 
       {/* Filters */}
-      <div className="flex flex-col sm:flex-row gap-4 p-4 bg-slate-900/50 border border-slate-800 rounded-2xl">
+      <div className="flex flex-col sm:flex-row gap-4 p-4 bg-slate-950/50 border border-slate-800/60 rounded-2xl">
         <div className="relative flex-1">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
           <input
@@ -237,7 +237,7 @@ export const JournalTab: React.FC<JournalTabProps> = ({ accentColor, providerCon
 };
 
 const StatCard: React.FC<{ label: string; value: number; color: string; icon: React.ReactNode }> = ({ label, value, color, icon }) => (
-  <div className="p-4 bg-slate-900/50 border border-slate-800 rounded-2xl text-center" style={{ borderColor: color }}>
+  <div className="p-4 bg-slate-950/50 border border-slate-800/60 rounded-2xl text-center" style={{ borderColor: color }}>
     <div className="flex items-center justify-center gap-1 mb-1" style={{ color }}>
       {icon}
     </div>

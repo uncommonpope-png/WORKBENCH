@@ -148,7 +148,7 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({ accentColor, initi
 
   return (
     <div className="flex flex-col h-full gap-6">
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 p-4 bg-slate-900/50 border border-slate-800 rounded-2xl">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 p-4 bg-slate-950/50 border border-slate-800/60 rounded-2xl">
         <div className="flex items-center gap-3">
           <div className="w-12 h-12 rounded-xl bg-slate-800 flex items-center justify-center">
             <Zap className="w-6 h-6 text-purple-400" />
@@ -206,7 +206,7 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({ accentColor, initi
         ))}
       </div>
 
-      <div className="p-4 bg-slate-900/50 border border-slate-800 rounded-2xl">
+      <div className="p-4 bg-slate-950/50 border border-slate-800/60 rounded-2xl">
         <h3 className="font-bold text-white mb-3">Token Usage</h3>
         <div className="grid grid-cols-4 gap-3 text-center">
           <div>
@@ -228,7 +228,7 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({ accentColor, initi
         </div>
       </div>
 
-      <div className="p-4 bg-slate-900/50 border border-slate-800 rounded-2xl">
+      <div className="p-4 bg-slate-950/50 border border-slate-800/60 rounded-2xl">
         <h3 className="font-bold text-white mb-3">Recent Models</h3>
         <div className="max-h-48 overflow-y-auto space-y-2">
           {recentModels.map(modelKey => {

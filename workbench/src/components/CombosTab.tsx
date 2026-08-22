@@ -104,9 +104,9 @@ export const CombosTab: React.FC<CombosTabProps> = ({ accentColor, skills, provi
   };
 
   return (
-    <div className="flex flex-col h-full gap-6">
+    <div className="bg-slate-900/60 border border-slate-800/80 backdrop-blur-md rounded-2xl p-6 shadow-2xl relative overflow-hidden text-slate-100 flex flex-col h-full gap-6 hover:border-pink-500/20 transition-all">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 p-4 bg-slate-900/50 border border-slate-800 rounded-2xl">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 p-4 bg-slate-950/50 border border-slate-800/60 rounded-2xl">
         <div className="flex items-center gap-4">
           <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-purple-500/20 to-slate-950 border flex items-center justify-center" style={{ borderColor: accentColor }}>
             <Gem className="w-6 h-6" style={{ color: accentColor }} />
@@ -132,7 +132,7 @@ export const CombosTab: React.FC<CombosTabProps> = ({ accentColor, skills, provi
 
       {/* Created This Session */}
       {createdCombos.length > 0 && (
-        <div className="p-4 bg-slate-900/50 border border-slate-800 rounded-2xl">
+        <div className="p-4 bg-slate-950/50 border border-slate-800/60 rounded-2xl">
           <div className="flex items-center gap-2 mb-3">
             <Sparkles className="w-4 h-4" style={{ color: accentColor }} />
             <span className="font-bold text-white">Curated Sovereignty Stacks:</span>

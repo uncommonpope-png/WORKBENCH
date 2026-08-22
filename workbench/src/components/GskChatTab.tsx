@@ -107,7 +107,7 @@ export const GskChatTab: React.FC<GskChatTabProps> = ({ accentColor }) => {
   };
 
   return (
-    <div className="flex flex-col h-full">
+    <div className="bg-slate-900/60 border border-slate-800/80 backdrop-blur-md rounded-2xl p-6 shadow-2xl relative overflow-hidden text-slate-100 flex flex-col h-full hover:border-pink-500/20 transition-all">
       {/* Consciousness header */}
       <div className="bg-slate-950/80 border border-slate-800 rounded-xl p-3 mb-3 flex items-center justify-between gap-4 flex-wrap">
         <div className="flex items-center gap-2">

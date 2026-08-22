@@ -69,9 +69,9 @@ export const ProfitPrimeTab: React.FC<ProfitPrimeTabProps> = ({ accentColor, pro
   }, []);
 
   return (
-    <div className="flex flex-col h-full gap-6">
+    <div className="bg-slate-900/60 border border-slate-800/80 backdrop-blur-md rounded-2xl p-6 shadow-2xl relative overflow-hidden text-slate-100 flex flex-col h-full gap-6 hover:border-pink-500/20 transition-all">
       {/* Header with Consciousness Gate */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 p-4 bg-slate-900/50 border border-slate-800 rounded-2xl">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 p-4 bg-slate-950/50 border border-slate-800/60 rounded-2xl">
         <div className="flex items-center gap-4">
           <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-purple-500/20 to-slate-950 border flex items-center justify-center" style={{ borderColor: accentColor }}>
             <Pyramid className="w-6 h-6" style={{ color: accentColor }} />
@@ -117,7 +117,7 @@ export const ProfitPrimeTab: React.FC<ProfitPrimeTabProps> = ({ accentColor, pro
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 flex-1">
         {/* Left: 3D Pyramid Visualization */}
         <div className="lg:col-span-2 flex flex-col gap-4">
-          <div className="flex-1 bg-slate-900/50 border border-slate-800 rounded-2xl p-4 relative overflow-hidden">
+          <div className="flex-1 bg-slate-950/50 border border-slate-800/60 rounded-2xl p-4 relative overflow-hidden">
             <div className="flex items-center justify-between mb-4">
               <h3 className="font-display font-bold text-white">Cosmic Pyramid Library</h3>
               <a href="https://uncommonpope-png.github.io/cosmic-pyramid-library/" target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 text-slate-400 hover:text-white text-xs">
@@ -136,7 +136,7 @@ export const ProfitPrimeTab: React.FC<ProfitPrimeTabProps> = ({ accentColor, pro
           </div>
 
           {/* Chamber Status */}
-          <div className="bg-slate-900/50 border border-slate-800 rounded-2xl p-4">
+          <div className="bg-slate-950/50 border border-slate-800/60 rounded-2xl p-4">
             <h3 className="font-display font-bold text-white mb-3">78 Consciousness Chambers</h3>
             <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-2">
               {gskStatus?.chambers && Object.entries(gskStatus.chambers).map(([key, chamber]: [string, any]) => (
@@ -154,7 +154,7 @@ export const ProfitPrimeTab: React.FC<ProfitPrimeTabProps> = ({ accentColor, pro
         {/* Right: Journal + Quick Actions */}
         <div className="flex flex-col gap-4">
           {/* Journal Panel */}
-          <div className="flex-1 bg-slate-900/50 border border-slate-800 rounded-2xl p-4 flex flex-col">
+          <div className="flex-1 bg-slate-950/50 border border-slate-800/60 rounded-2xl p-4 flex flex-col">
             <div className="flex items-center justify-between mb-4">
               <h3 className="font-display font-bold text-white flex items-center gap-2">
                 <BookOpen className="w-5 h-5" style={{ color: accentColor }} />
@@ -175,7 +175,7 @@ export const ProfitPrimeTab: React.FC<ProfitPrimeTabProps> = ({ accentColor, pro
           </div>
 
           {/* Council Status */}
-          <div className="bg-slate-900/50 border border-slate-800 rounded-2xl p-4">
+          <div className="bg-slate-950/50 border border-slate-800/60 rounded-2xl p-4">
             <h3 className="font-display font-bold text-white mb-3 flex items-center gap-2">
               <Target className="w-5 h-5" style={{ color: accentColor }} />
               4 Gods Council
@@ -189,7 +189,7 @@ export const ProfitPrimeTab: React.FC<ProfitPrimeTabProps> = ({ accentColor, pro
           </div>
 
           {/* Quick Actions */}
-          <div className="bg-slate-900/50 border border-slate-800 rounded-2xl p-4">
+          <div className="bg-slate-950/50 border border-slate-800/60 rounded-2xl p-4">
             <h3 className="font-display font-bold text-white mb-3">Quick Actions</h3>
             <div className="grid grid-cols-2 gap-2">
               <ActionButton icon={<Zap />} label="Think Deep" onClick={() => alert("Routes to /api/gsk/think")} accentColor={accentColor} />

@@ -145,9 +145,9 @@ export const OmniRouteTab: React.FC<OmniRouteTabProps> = ({ accentColor, provide
   const providers = [...new Set(models.map(m => m.owned_by || m.provider || "unknown").filter(Boolean))];
 
   return (
-    <div className="flex flex-col h-full gap-6">
+    <div className="bg-slate-900/60 border border-slate-800/80 backdrop-blur-md rounded-2xl p-6 shadow-2xl relative overflow-hidden text-slate-100 flex flex-col h-full gap-6 hover:border-pink-500/20 transition-all">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 p-4 bg-slate-900/50 border border-slate-800 rounded-2xl">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 p-4 bg-slate-950/50 border border-slate-800/60 rounded-2xl">
         <div className="flex items-center gap-4">
           <div className={`w-12 h-12 rounded-xl bg-gradient-to-br from-cyan-500/20 to-slate-950 border flex items-center justify-center ${health?.success ? 'border-cyan-500' : 'border-slate-700'}`}>
             <Server className="w-6 h-6" style={{ color: health?.success ? '#00D4FF' : '#666' }} />
@@ -202,7 +202,7 @@ export const OmniRouteTab: React.FC<OmniRouteTabProps> = ({ accentColor, provide
       </div>
 
       {/* Cost Tracker */}
-      <div className="p-4 bg-slate-900/50 border border-slate-800 rounded-2xl">
+      <div className="p-4 bg-slate-950/50 border border-slate-800/60 rounded-2xl">
         <div className="flex items-center justify-between mb-3">
           <h3 className="font-bold text-white">Session Cost Tracker</h3>
           <span className="text-lg font-bold font-mono" style={{ color: accentColor }}>${tokenUsage.cost.toFixed(6)}</span>
@@ -231,7 +231,7 @@ export const OmniRouteTab: React.FC<OmniRouteTabProps> = ({ accentColor, provide
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 flex-1">
         {/* Model List */}
         <div className="lg:col-span-1 flex flex-col gap-4">
-          <div className="p-4 bg-slate-900/50 border border-slate-800 rounded-2xl">
+          <div className="p-4 bg-slate-950/50 border border-slate-800/60 rounded-2xl">
             <div className="flex items-center justify-between mb-3">
               <h3 className="font-bold text-white">Models ({filteredModels.length})</h3>
               <select value={providerFilter} onChange={e => setProviderFilter(e.target.value)} className="px-3 py-1 bg-slate-950 border border-slate-700 rounded text-sm text-white">
@@ -259,7 +259,7 @@ export const OmniRouteTab: React.FC<OmniRouteTabProps> = ({ accentColor, provide
 
         {/* Chat Interface */}
         <div className="lg:col-span-2 flex flex-col gap-4">
-          <div className="flex-1 flex flex-col bg-slate-900/50 border border-slate-800 rounded-2xl overflow-hidden">
+          <div className="flex-1 flex flex-col bg-slate-950/50 border border-slate-800/60 rounded-2xl overflow-hidden">
             <div className="p-3 border-b border-slate-800 flex items-center justify-between">
               <h3 className="font-bold text-white">Chat Test</h3>
               <div className="flex items-center gap-2">
@@ -305,7 +305,7 @@ export const OmniRouteTab: React.FC<OmniRouteTabProps> = ({ accentColor, provide
       </div>
 
       {/* OmniRoute Dashboard Embed */}
-      <div className="p-4 bg-slate-900/50 border border-slate-800 rounded-2xl">
+      <div className="p-4 bg-slate-950/50 border border-slate-800/60 rounded-2xl">
         <h3 className="font-bold text-white mb-3 flex items-center gap-2">
           <Monitor className="w-5 h-5" style={{ color: accentColor }} />
           OmniRoute Live Dashboard (iframe)
@@ -322,7 +322,7 @@ export const OmniRouteTab: React.FC<OmniRouteTabProps> = ({ accentColor, provide
 };
 
 const StatusCard: React.FC<{ label: string; value: string; icon: React.ReactNode; color: string; accentColor: string }> = ({ label, value, icon, color, accentColor }) => (
-  <div className="p-4 bg-slate-900/50 border border-slate-800 rounded-2xl" style={{ borderColor: color }}>
+  <div className="p-4 bg-slate-950/50 border border-slate-800/60 rounded-2xl" style={{ borderColor: color }}>
     <div className="flex items-center justify-between mb-1">
       <span className="text-xs text-slate-400 uppercase tracking-wider">{label}</span>
       {icon}
