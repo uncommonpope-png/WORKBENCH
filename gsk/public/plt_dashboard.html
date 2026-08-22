@@ -1,22 +1,25 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Sovereign PLT Dashboard & Cognitive Evolution</title>
-<style>
-body { background: #0b0f19; color: #e2e8f0; font-family: system-ui, sans-serif; margin: 0; padding: 20px; }
-.grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 20px; }
-.card { background: #1e293b; border-radius: 12px; padding: 20px; border: 1px solid #334155; }
-.metric { font-size: 2.5rem; font-weight: bold; color: #38bdf8; }
-</style>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Profit Bible - PLT Real-Time Dashboard</title>
+  <style>
+    body { font-family: monospace; background: #0f172a; color: #f8fafc; margin: 0; padding: 20px; }
+    .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-top: 20px; }
+    .card { background: #1e293b; border: 1px solid #334155; border-radius: 8px; padding: 16px; }
+    .metric { font-size: 24px; font-weight: bold; margin-top: 8px; }
+  </style>
 </head>
 <body>
-<h1>Sovereign PLT Dashboard</h1>
-<div class="grid">
-  <div class="card"><h2>Profit + Love - Tax</h2><div id="plt-score" class="metric">0.00</div></div>
-  <div class="card"><h2>Cognitive Valence</h2><div id="valence" class="metric">0.00</div></div>
-  <div class="card"><h2>Sacred Resonance</h2><div id="resonance" class="metric">0.35</div></div>
-</div>
+  <h1>Profit Bible - Sovereign PLT & System Evolution Dashboard</h1>
+  <div id="metrics-root" class="grid">
+    <div class="card"><div>PROFIT SCORE</div><div id="profit-val" class="metric">0.90</div></div>
+    <div class="card"><div>LOVE SCORE</div><div id="love-val" class="metric">0.85</div></div>
+    <div class="card"><div>TAX SCORE</div><div id="tax-val" class="metric">0.05</div></div>
+  </div>
+  <script>
+    console.log("PLT Dashboard Initialized");
+  </script>
 </body>
 </html>

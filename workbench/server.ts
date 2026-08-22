@@ -22,7 +22,7 @@ const app = express();
 const PORT = 3000;
 
 const GSK_MCP_URL = process.env.GSK_MCP_URL || "http://127.0.0.1:3001";
-const GSK_MCP_KEY = process.env.MCP_API_KEY || "gsk-dev-key";
+const GSK_MCP_KEY = process.env.MCP_API_KEY || "gsk-mcp-key-dev";
 const OMNIROUTE_URL = process.env.OMNIROUTE_URL || "http://127.0.0.1:20128";
 const CPL_URL = process.env.CPL_URL || "http://127.0.0.1:3457";
 

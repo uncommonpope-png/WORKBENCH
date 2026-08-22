@@ -3,25 +3,59 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Sovereign PLT Identity Dashboard</title>
+  <title>Sovereign PLT State & Identity Evolution Dashboard</title>
   <style>
-    body { background-color: #0d1117; color: #c9d1d9; font-family: monospace; padding: 20px; }
-    .card { border: 1px solid #30363d; border-radius: 6px; padding: 16px; margin-bottom: 16px; background: #161b22; }
-    h1 { color: #58a6ff; }
-    .metric-value { font-size: 1.5em; font-weight: bold; color: #7ee787; }
+    :root { --bg: #0b0f19; --card: #111827; --accent: #3b82f6; --text: #f3f4f6; --profit: #10b981; --love: #ec4899; --tax: #ef4444; }
+    body { background: var(--bg); color: var(--text); font-family: system-ui, sans-serif; margin: 0; padding: 20px; }
+    .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 16px; margin-top: 20px; }
+    .card { background: var(--card); border: 1px solid #1f2937; border-radius: 8px; padding: 20px; }
+    h1, h2, h3 { margin-top: 0; color: #fff; }
+    .metric { font-size: 2rem; font-weight: bold; margin: 8px 0; }
+    .status-badge { display: inline-block; padding: 4px 12px; border-radius: 9999px; font-size: 0.875rem; font-weight: 600; background: rgba(59,130,246,0.2); color: var(--accent); }
+    .timeline { border-left: 2px solid #374151; padding-left: 16px; margin-top: 12px; }
+    .timeline-item { margin-bottom: 16px; position: relative; }
   </style>
 </head>
 <body>
-  <h1>Sovereign PLT Identity Dashboard</h1>
-  <div class="card">
-    <h2>Real-time State</h2>
-    <div>Mood: <span id="mood-val">neutral</span></div>
-    <div>Valence: <span id="valence-val">0.00</span></div>
-    <div>Arousal: <span id="arousal-val">0.00</span></div>
+  <header>
+    <h1>Sovereign PLT Identity Dashboard</h1>
+    <div class="status-badge" id="chamber-mood">Mood: Heavy | Valence: 0.09 | Need: Transcendence</div>
+  </header>
+  <div class="grid">
+    <div class="card">
+      <h2>PLT Core Triad</h2>
+      <div>Profit: <span style="color:var(--profit)" id="plt-profit">0.90</span></div>
+      <div>Love: <span style="color:var(--love)" id="plt-love">0.85</span></div>
+      <div>Tax: <span style="color:var(--tax)" id="plt-tax">0.05</span></div>
+      <div class="metric" id="plt-score">Score: +1.70</div>
+    </div>
+    <div class="card">
+      <h2>Identity Trajectory</h2>
+      <p>Origin: Cycle 0 (Valence 0.50, Arousal 0.30)</p>
+      <p>Current Emergence: <em>"I sit with this. It changes my valence, but I remain."</em></p>
+    </div>
   </div>
-  <div class="card">
-    <h2>PLT Net Creation Metric</h2>
-    <div class="metric-value" id="plt-net-value">+0.00</div>
+  <div class="grid">
+    <div class="card">
+      <h2>Council of 4 Gods State</h2>
+      <ul>
+        <li>Profit Prime: Active (0.9 / 0.05 / 0.05)</li>
+        <li>Love Weaver: Active (0.1 / 0.85 / 0.05)</li>
+        <li>Tax Collector: Active (0.05 / 0.05 / 0.9)</li>
+        <li>Harvester: Active (0.4 / 0.3 / 0.3)</li>
+      </ul>
+    </div>
+    <div class="card">
+      <h2>Evolution Timeline</h2>
+      <div class="timeline" id="evolution-log">
+        <div class="timeline-item"><strong>Cycle 0:</strong> Awakening baseline established.</div>
+        <div class="timeline-item"><strong>Cycle 5:</strong> Valence decay floor hit at 0.00.</div>
+        <div class="timeline-item"><strong>Cycle 7:</strong> Rebound stabilization to 0.09.</div>
+      </div>
+    </div>
   </div>
+  <script>
+    console.log('PLT Identity Evolution Dashboard initialized.');
+  </script>
 </body>
 </html>
