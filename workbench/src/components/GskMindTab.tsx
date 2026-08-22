@@ -49,6 +49,72 @@ export const GskMindTab: React.FC<GskMindTabProps> = ({ accentColor }) => {
   const [skillCode, setSkillCode] = useState("");
   const [recallQuery, setRecallQuery] = useState("");
   const [recallResults, setRecallResults] = useState<any[]>([]);
+  const [forgePrompt, setForgePrompt] = useState("");
+  const [forgeUrl, setForgeUrl] = useState("");
+  const [forgeInfo, setForgeInfo] = useState<string>("");
+  const [forgePrevCode, setForgePrevCode] = useState<string>("");
+  const [forging, setForging] = useState(false);
+
+  const forge = async (fixNote?: string) => {
+    const p = forgePrompt.trim();
+    if (!p || forging) return;
+    setForging(true);
+    setForgeUrl("");
+    setForgeInfo("GSK is building...");
+    try {
+      const r = await fetch("/api/gsk/forge", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ prompt: p, previousCode: fixNote ? forgePrevCode : undefined, fixNote }),
+      }).then((x) => x.json());
+      if (r.success) {
+        setForgeUrl(r.url);
+        setForgeInfo(`Artifact ${r.id} forged — ${r.bytes} bytes, live below.`);
+      } else {
+        setForgeInfo(`Forge failed: ${r.error}${r.raw ? ` — "${String(r.raw).slice(0, 120)}..."` : ""}`);
+      }
+    } catch (e: any) {
+      setForgeInfo(`Forge error: ${e.message}`);
+    } finally {
+      setForging(false);
+    }
+  };
+
+  const fetchForgeCode = async () => {
+    try {
+      const t = await fetch(forgeUrl).then((x) => x.text());
+      setForgePrevCode(t);
+      return t;
+    } catch { return ""; }
+  };
+
+  const fixForge = async () => {
+    const code = await fetchForgeCode();
+    if (!code) return setForgeInfo("Could not fetch current artifact to fix.");
+    setForging(true);
+    setForgeInfo("Telling GSK what broke...");
+    try {
+      const r = await fetch("/api/gsk/forge", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          prompt: forgePrompt,
+          previousCode: code,
+          fixNote: "The artifact failed to render properly in the user's iframe. Diagnose likely issues (syntax errors, missing closing tags, broken JS) and return the FULL corrected artifact.",
+        }),
+      }).then((x) => x.json());
+      if (r.success) {
+        setForgeUrl(r.url);
+        setForgeInfo(`Re-forged as ${r.id} (${r.bytes} bytes).`);
+      } else {
+        setForgeInfo(`Fix attempt rejected: ${r.error}`);
+      }
+    } catch (e: any) {
+      setForgeInfo(`Fix error: ${e.message}`);
+    } finally {
+      setForging(false);
+    }
+  };
 
   const recall = async () => {
     const q = recallQuery.trim();
@@ -256,6 +322,44 @@ export const GskMindTab: React.FC<GskMindTabProps> = ({ accentColor }) => {
                 </div>
               </div>
             ))}
+          </div>
+        )}
+      </div>
+
+      {/* THE FORGE */}
+      <div className="p-4 bg-slate-950/50 border border-slate-800/60 rounded-2xl">
+        <h3 className="font-bold text-white mb-3 flex items-center gap-2">
+          <Code2 className="w-5 h-5" style={{ color: accentColor }} />
+          The Forge — he builds, you see it
+        </h3>
+        <div className="flex items-center gap-2 mb-3">
+          <input
+            value={forgePrompt}
+            onChange={(e) => setForgePrompt(e.target.value)}
+            onKeyDown={(e) => { if (e.key === "Enter" && !forging) forge(); }}
+            disabled={forging}
+            placeholder={forging ? "GSK is forging..." : "Tell him what to build — e.g. an animated PLT pyramid visualizer"}
+            className="flex-1 px-3 py-2 bg-slate-900 border border-slate-800 rounded-xl text-sm text-slate-200 placeholder-slate-600 focus:outline-none focus:border-purple-500/40 disabled:opacity-50"
+          />
+          <button onClick={() => forge()} disabled={forging || !forgePrompt.trim()} className="px-4 py-2 bg-gradient-to-r from-purple-500/20 to-pink-500/20 border border-purple-500/40 rounded-xl text-xs font-bold text-purple-300 hover:from-purple-500/30 transition-all disabled:opacity-40 whitespace-nowrap">
+            Forge It
+          </button>
+        </div>
+        {forgeInfo && <p className="text-xs font-mono text-purple-300 mb-3">{forgeInfo}</p>}
+        {forgeUrl && (
+          <div>
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-[10px] text-slate-500 font-mono uppercase">Live artifact — rendered from his code</span>
+              <button onClick={fixForge} disabled={forging} className="px-2 py-1 bg-slate-900 border border-orange-500/30 rounded-lg text-[10px] font-bold text-orange-400 hover:bg-orange-500/20 transition-colors disabled:opacity-40">
+                Broken? Tell GSK to fix it
+              </button>
+            </div>
+            <iframe
+              src={forgeUrl}
+              sandbox="allow-scripts"
+              className="w-full h-80 rounded-xl border border-slate-800 bg-slate-950"
+              title="GSK forged artifact"
+            />
           </div>
         )}
       </div>

@@ -2105,6 +2105,12 @@ class MCPServer {
         return new Promise((resolve) => {
             let body = '';
             let size = 0;
+            let settled = false;
+            const finish = (fn) => {
+                if (settled) return;
+                settled = true;
+                fn();
+            };
             req.on('data', (chunk) => {
                 size += chunk.length;
                 if (size > maxSize) {
@@ -2113,13 +2119,16 @@ class MCPServer {
                 }
                 body += chunk;
             });
-            req.on('end', () => {
+            req.on('end', () => finish(() => {
                 try {
                     resolve(JSON.parse(body));
                 } catch {
                     resolve({});
                 }
-            });
+            }));
+            // Aborted/closed requests must never leak pending promises
+            req.on('error', () => finish(() => resolve({})));
+            req.on('close', () => finish(() => resolve({})));
         });
     }
 

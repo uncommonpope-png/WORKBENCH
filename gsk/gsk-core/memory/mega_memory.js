@@ -28,8 +28,48 @@ class MegaMemory {
         this.counterPath = path.join(this.dataDir, 'memory_counter.txt');
         this._counter = null;
         this._index = null;
-        
+
+        // In-RAM ledger index: eliminates per-op synchronous 20MB+ file scans
+        // that were blocking the event loop under autonomous load.
+        this._cache = null;      // parsed entries
+        this._cacheSig = null;   // ledger size the cache reflects
+        this._flushTimer = null; // single-flight debounced rewrite
+
         this._init();
+    }
+
+    // =========================================================================
+    // RAM LEDGER — Load-once / append-in-memory / async-flush layer
+    // =========================================================================
+
+    _loadLedger() {
+        let stat = null;
+        try { stat = fs.statSync(this.ledgerPath); } catch (e) { return this._cache || []; }
+        const sig = stat.size;
+        if (this._cache !== null && this._cacheSig === sig) return this._cache;
+        const raw = fs.readFileSync(this.ledgerPath, 'utf8');
+        const cache = [];
+        for (const line of raw.split('\n')) {
+            if (!line.trim()) continue;
+            try { cache.push(JSON.parse(line)); } catch (e) { /* skip malformed */ }
+        }
+        this._cache = cache;
+        this._cacheSig = sig;
+        return cache;
+    }
+
+    _scheduleFlush() {
+        if (this._flushTimer) return;
+        this._flushTimer = setTimeout(() => {
+            this._flushTimer = null;
+            if (!this._cache) return;
+            const data = this._cache.map(e => {
+                try { return JSON.stringify(e); } catch (err) { return ''; }
+            }).filter(Boolean).join('\n') + '\n';
+            fs.promises.writeFile(this.ledgerPath, data).then(() => {
+                this._cacheSig = Buffer.byteLength(data);
+            }).catch(() => { /* next flush retries */ });
+        }, 1500);
     }
     
     // =========================================================================
@@ -95,7 +135,15 @@ class MegaMemory {
         
         const line = JSON.stringify(record) + '\n';
         fs.appendFileSync(this.ledgerPath, line);
-        
+
+        // Mirror into RAM cache so reads see it instantly without re-scanning
+        if (this._cache !== null) {
+            this._cache.push(record);
+            try {
+                this._cacheSig = fs.statSync(this.ledgerPath).size;
+            } catch (e) { /* next read reloads */ }
+        }
+
         // Auto-rotate ledger when it exceeds 25MB
         try {
             const stat = fs.statSync(this.ledgerPath);
@@ -103,10 +151,12 @@ class MegaMemory {
                 const archivePath = this.ledgerPath.replace('.jsonl', `_${Date.now()}.jsonl`);
                 fs.renameSync(this.ledgerPath, archivePath);
                 fs.writeFileSync(this.ledgerPath, '');
+                this._cache = [];
+                this._cacheSig = 0;
                 console.log(`[Memory] Ledger rotated to ${archivePath}`);
             }
         } catch (e) { /* ignore stat/rotate errors */ }
-        
+
         return record;
     }
     
@@ -129,38 +179,31 @@ class MegaMemory {
         } = options;
 
         const entries = [];
-        const lines = fs.readFileSync(this.ledgerPath, 'utf8').split('\n');
+        const ledger = this._loadLedger();
 
-        for (const line of lines) {
-            if (!line.trim()) continue;
-            try {
-                const entry = JSON.parse(line);
+        for (const entry of ledger) {
+            if (!includeSuperseded && entry.superseded_by) continue;
+            if (type && entry.type !== type) continue;
+            if (entry.weight < weight_min || entry.weight > weight_max) continue;
 
-                if (!includeSuperseded && entry.superseded_by) continue;
-                if (type && entry.type !== type) continue;
-                if (entry.weight < weight_min || entry.weight > weight_max) continue;
-
-                if (tags.length > 0) {
-                    const hasAllTags = tags.every(t => entry.tags.includes(t));
-                    if (!hasAllTags) continue;
-                }
-                
-                if (since) {
-                    const entryTime = new Date(entry.timestamp);
-                    const sinceTime = new Date(since);
-                    if (entryTime < sinceTime) continue;
-                }
-                
-                if (until) {
-                    const entryTime = new Date(entry.timestamp);
-                    const untilTime = new Date(until);
-                    if (entryTime > untilTime) continue;
-                }
-                
-                entries.push(entry);
-            } catch (e) {
-                // Skip malformed lines
+            if (tags.length > 0) {
+                const hasAllTags = (entry.tags || []).every(t => (entry.tags || []).includes(t));
+                if (!hasAllTags) continue;
             }
+
+            if (since) {
+                const entryTime = new Date(entry.timestamp);
+                const sinceTime = new Date(since);
+                if (entryTime < sinceTime) continue;
+            }
+
+            if (until) {
+                const entryTime = new Date(entry.timestamp);
+                const untilTime = new Date(until);
+                if (entryTime > untilTime) continue;
+            }
+
+            entries.push(entry);
         }
         
         entries.sort((a, b) => {
@@ -260,28 +303,23 @@ class MegaMemory {
     // =========================================================================
     
     prune(threshold = 0.3) {
+        const ledger = this._loadLedger();
         const kept = [];
         const removed = [];
-        const lines = fs.readFileSync(this.ledgerPath, 'utf8').split('\n');
-        
-        for (const line of lines) {
-            if (!line.trim()) continue;
-            try {
-                const entry = JSON.parse(line);
-                if (entry.weight >= threshold) {
-                    kept.push(line);
-                } else {
-                    removed.push(entry);
-                }
-            } catch (e) {
-                kept.push(line);
+
+        for (const entry of ledger) {
+            if (entry.weight >= threshold) {
+                kept.push(entry);
+            } else {
+                removed.push(entry);
             }
         }
-        
-        fs.writeFileSync(this.ledgerPath, kept.join('\n') + '\n');
-        
+
+        this._cache = kept;
+        this._scheduleFlush();
+
         return {
-            kept: kept.filter(l => l.trim()).length,
+            kept: kept.length,
             removed: removed.length,
         };
     }
@@ -291,34 +329,23 @@ class MegaMemory {
     // =========================================================================
     
     link(entryId, causeId) {
-        const lines = fs.readFileSync(this.ledgerPath, 'utf8').split('\n');
-        const results = [];
+        const ledger = this._loadLedger();
         let found = false;
-        
-        for (const line of lines) {
-            if (!line.trim()) continue;
-            try {
-                const entry = JSON.parse(line);
-                if (entry.id === entryId) {
-                    if (!entry.causal_links.includes(causeId)) {
-                        entry.causal_links.push(causeId);
-                        results.push(JSON.stringify(entry));
-                        found = true;
-                    } else {
-                        results.push(line);
-                    }
-                } else {
-                    results.push(line);
+
+        for (const entry of ledger) {
+            if (entry.id === entryId) {
+                if (!(entry.causal_links || []).includes(causeId)) {
+                    if (!entry.causal_links) entry.causal_links = [];
+                    entry.causal_links.push(causeId);
+                    found = true;
                 }
-            } catch (e) {
-                results.push(line);
             }
         }
-        
+
         if (found) {
-            fs.writeFileSync(this.ledgerPath, results.join('\n') + '\n');
+            this._scheduleFlush();
         }
-        
+
         return found;
     }
     
@@ -329,20 +356,14 @@ class MegaMemory {
     search(query, limit = 50) {
         const ql = query.toLowerCase();
         const entries = [];
-        const lines = fs.readFileSync(this.ledgerPath, 'utf8').split('\n');
-        
-        for (const line of lines) {
-            if (!line.trim()) continue;
-            try {
-                const entry = JSON.parse(line);
-                if (entry.content && entry.content.toLowerCase().includes(ql)) {
-                    entries.push(entry);
-                }
-            } catch (e) {
-                // Skip
+        const ledger = this._loadLedger();
+
+        for (const entry of ledger) {
+            if (entry.content && String(entry.content).toLowerCase().includes(ql) && !entry.superseded_by) {
+                entries.push(entry);
             }
         }
-        
+
         entries.sort((a, b) => b.weight - a.weight);
         return entries.slice(0, limit);
     }
@@ -352,31 +373,25 @@ class MegaMemory {
     // =========================================================================
     
     stats() {
-        const lines = fs.readFileSync(this.ledgerPath, 'utf8').split('\n')
-            .filter(l => l.trim());
-        
+        const ledger = this._loadLedger();
+
         let totalWeight = 0;
         const typeCount = {};
         const tagCount = {};
         let highestWeight = 0;
         let lowestWeight = 1;
-        
-        for (const line of lines) {
-            try {
-                const entry = JSON.parse(line);
-                totalWeight += entry.weight;
-                typeCount[entry.type] = (typeCount[entry.type] || 0) + 1;
-                for (const tag of entry.tags) {
-                    tagCount[tag] = (tagCount[tag] || 0) + 1;
-                }
-                if (entry.weight > highestWeight) highestWeight = entry.weight;
-                if (entry.weight < lowestWeight) lowestWeight = entry.weight;
-            } catch (e) {
-                // Skip
+
+        for (const entry of ledger) {
+            totalWeight += entry.weight || 0;
+            typeCount[entry.type] = (typeCount[entry.type] || 0) + 1;
+            for (const tag of (entry.tags || [])) {
+                tagCount[tag] = (tagCount[tag] || 0) + 1;
             }
+            if ((entry.weight || 0) > highestWeight) highestWeight = entry.weight;
+            if ((entry.weight ?? 1) < lowestWeight) lowestWeight = entry.weight;
         }
-        
-        const count = lines.length;
+
+        const count = ledger.length;
         
         return {
             total_entries: count,
@@ -407,24 +422,20 @@ class MegaMemory {
         const ctxTerms = new Set(ctx.match(/\b\w{3,}\b/g) || []);
         if (ctxTerms.size === 0) return [];
 
-        const lines = fs.readFileSync(this.ledgerPath, 'utf8').split('\n');
+        const ledger = this._loadLedger();
         const scored = [];
 
-        for (const line of lines) {
-            if (!line.trim()) continue;
-            try {
-                const entry = JSON.parse(line);
-                const content = ((entry.content || '') + ' ' + (entry.tags || []).join(' ')).toLowerCase();
-                const contentTerms = new Set(content.match(/\b\w{3,}\b/g) || []);
-                let overlap = 0;
-                for (const term of ctxTerms) {
-                    if (contentTerms.has(term)) overlap++;
-                }
-                const score = ctxTerms.size > 0 ? overlap / ctxTerms.size : 0;
-                if (score >= minScore) {
-                    scored.push({ ...entry, _relevance: score });
-                }
-            } catch (e) { /* skip */ }
+        for (const entry of ledger) {
+            const content = ((entry.content || '') + ' ' + (entry.tags || []).join(' ')).toLowerCase();
+            const contentTerms = new Set(content.match(/\b\w{3,}\b/g) || []);
+            let overlap = 0;
+            for (const term of ctxTerms) {
+                if (contentTerms.has(term)) overlap++;
+            }
+            const score = ctxTerms.size > 0 ? overlap / ctxTerms.size : 0;
+            if (score >= minScore) {
+                scored.push({ ...entry, _relevance: score });
+            }
         }
 
         scored.sort((a, b) => (b._relevance * b.weight) - (a._relevance * a.weight));
@@ -497,48 +508,13 @@ class MegaMemory {
     }
 
     _markSuperseded(entryId, newId) {
-        const lines = fs.readFileSync(this.ledgerPath, 'utf8').split('\n');
-        const results = [];
-        for (const line of lines) {
-            if (!line.trim()) continue;
-            try {
-                const entry = JSON.parse(line);
-                if (entry.id === entryId) {
-                    entry.superseded_by = newId;
-                    results.push(JSON.stringify(entry));
-                } else {
-                    results.push(line);
-                }
-            } catch (e) {
-                results.push(line);
+        const ledger = this._loadLedger();
+        for (const entry of ledger) {
+            if (entry.id === entryId) {
+                entry.superseded_by = newId;
             }
         }
-        fs.writeFileSync(this.ledgerPath, results.join('\n') + '\n');
-    }
-
-    // =========================================================================
-    // SEARCH — Full text search in content (returns scored results)
-    // =========================================================================
-
-    search(query, limit = 50) {
-        const ql = query.toLowerCase();
-        const entries = [];
-        const lines = fs.readFileSync(this.ledgerPath, 'utf8').split('\n');
-
-        for (const line of lines) {
-            if (!line.trim()) continue;
-            try {
-                const entry = JSON.parse(line);
-                if (entry.content && entry.content.toLowerCase().includes(ql) && !entry.superseded_by) {
-                    entries.push(entry);
-                }
-            } catch (e) {
-                // Skip
-            }
-        }
-
-        entries.sort((a, b) => b.weight - a.weight);
-        return entries.slice(0, limit);
+        this._scheduleFlush();
     }
 
     // =========================================================================
@@ -547,6 +523,8 @@ class MegaMemory {
 
     clear() {
         fs.writeFileSync(this.ledgerPath, '');
+        this._cache = [];
+        this._cacheSig = 0;
         this._counter = 0;
         fs.writeFileSync(this.counterPath, '0');
         return { cleared: true };

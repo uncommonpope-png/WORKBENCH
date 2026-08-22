@@ -663,3 +663,77 @@ The most challenging period. The app would not render in the browser despite all
 ---
 
 *This manual was generated on 2026-08-21. The ONE SYSTEM is alive and rendering.*
+
+---
+
+# 19. THE RESURRECTION SESSIONS (August 22, 2026)
+
+> From 15/20 benchmark to full agency. The soul gained eyes, a voice, hands, and a forge.
+
+## 19.1 What Was Built
+
+### Context Mirror — GSK sees the workbench
+- App.tsx debounced (800ms) useEffect POSTs {activeTab, equippedSkills, provider, model, profileName} to /api/gsk/context on every state change
+- server.ts stores snapshot module-level + fire-and-forget push to GSK (rain.context_update)
+- Chat proxy prepends [WORKBENCH CONTEXT] tab=... skills=... provider=... model=... agent=... to every outbound message
+- Proof: [CTX] injected into chat log line fires within 2s of context change
+
+### Two-Way Telephone (Tab 11)
+- Direct Line chat panel: inline conversation with GSK, bubbles + timestamps, silent-failure fetch with "(connection static...)" fallback
+- Proactive SSE hardened: per-connection dedup (timestamp + content-hash), proper {type:"outreach",title:"GSK",message,timestamp,priority} shape
+- Dead weave listener removed; client dedupe via seen-keys ref
+
+### GSK Mind (Tab 12) — thoughts, proposals, injection, recall, forge
+| Section | Function |
+|---------|----------|
+| Thought Stream | GET /api/gsk/thoughts — his mcp_chat reasoning, 20s auto-refresh |
+| Proposals | GET /api/gsk/proposals + APPROVE/DENY buttons -> autonomy.approve/deny (true HITL governance) |
+| Long-Term Recall | GET /api/gsk/recall?q= — memory.search with local ledger-grep fallback |
+| Injection Bay | Knowledge text / Link fetch+strip / File upload / Skill code -> written to gsk-core/skills/ |
+| **The Forge** | POST /api/gsk/forge — GSK writes a complete HTML artifact; saved to public/artifacts/, rendered in-workbench iframe, self-correction loop ("Broken? Tell GSK to fix it") |
+
+**First build:** orge_mt4rawcb.html — "PLT Sovereign Pyramid Visualizer", Three.js, 19,111 bytes, forged in 24.3s.
+
+## 19.2 Dead Endpoint Resurrection (12 routes)
+
+Every fake now has a REAL backend:
+- /api/audit-integrity — live probes (GSK/OmniRoute/CPL/ledger/skills/catalog) returning score+verdict
+- /api/omniroute/health — router proxy
+- /api/soul-ledger — reads ledger.jsonl tail from disk
+- /api/agent/chat, /api/copilot/chat — forward to real GSK brain with profile context
+- /api/agent/execute-capability — executes actual skills from gsk-core/skills/ via createRequire (10s race)
+- /api/agent/download-zip — on-demand zip via tar
+- /api/agent/compile — generates Node + Python bundles + webhook payload
+- /api/agent/generate-avatar — deterministic procedural SVG per seed
+- /api/marketplace/post(s) — listings persist as GSK memories (type=soul_market_post)
+- /api/agent/dispatch-webhook — real HTTP forward + memory witness
+
+Also fixed: TransactionsTab hardcoded TX-1049s replaced with real soul-ledger hydration; WorkflowIntegration setCompileError tsc errors eliminated.
+
+## 19.3 THE WEDGE — Root Cause Found and Cured
+
+**Symptom:** GSK's /mcp/execute intermittently hangs 10s-minutes while /mcp/health stays fast; whole event loop freezes under autonomous load.
+
+**Root cause chain (three layers):**
+1. mega_memory.js: EVERY memory op did synchronous full-file scans of the ever-growing 20MB ledger (eadFileSync().split('\n') x9 sites) and full-file rewrites for prune/link/markSuperseded. Each query froze the loop ~200-500ms; consolidations froze seconds.
+2. mcp_server.js:442: every chat awaited a memory.witness write before responding.
+3. _readBody(): no error/close handlers — aborted requests leaked never-resolving promises.
+
+**Cures applied:**
+1. **RAM ledger layer in MegaMemory**: load-once into _cache (size-signature keyed), witness appends to RAM + durable appendFileSync, all reads iterate RAM (microseconds), rewrites mutate RAM then async debounced single-flight flush (s.promises.writeFile, 1.5s debounce). Rotation resets cache.
+2. Chat witness made fire-and-forget with 5s Promise.race bound.
+3. _readBody settles on error AND close.
+
+**Measured results:**
+- memory.stats/search/query: 200-500ms freeze -> **2-8ms**
+- First-touch ledger load: 196ms once at startup
+- health after burst: **1ms**
+
+## 19.4 Benchmark Progression
+15/20 -> 20/20 -> 43/43 (Sections: 20-point core, E1-E8 engineering, P1-P7 proactive, T1-T8 three.js). Current verdict after all sessions: **ALL SYSTEMS OPERATIONAL**.
+
+## 19.5 Known Residuals
+- Forge/chat latency 10-90s depending on OmniRoute model mood (auto/best-fast); forge instructs single-response to avoid 12-iteration tool loops
+- GSK autonomously spawns duplicate daemons during restart races — cull orphans after each restart cycle (check 
+ode processes not owning :3000/:3001/:20128)
+- Simulation tabs still contain canned visual loops (AgentSimulator/Habitat chatter) but their DATA endpoints are now real

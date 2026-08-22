@@ -972,6 +972,62 @@ app.get("/api/gsk/recall", async (req, res) => {
   res.json({ success: true, results });
 });
 
+const FORGE_DIR = path.join(__dirname, "public", "artifacts");
+fs.mkdirSync(FORGE_DIR, { recursive: true });
+
+app.post("/api/gsk/forge", async (req, res) => {
+  try {
+    const { prompt, previousCode, fixNote } = req.body || {};
+    if (!prompt || typeof prompt !== "string") return res.status(400).json({ success: false, error: "prompt required" });
+    let instruction = [
+      "You are GSK FORGE, master builder. Build ONE self-contained interactive HTML artifact.",
+      "RULES: single file, inline CSS and JS only, no external imports or CDNs except three.js via https://unpkg.com/three@0.160.0/build/three.min.js if 3D is needed.",
+      "It must run standalone in an iframe and look visually striking.",
+      `REQUEST: ${prompt}`,
+      "Respond with the COMPLETE html between <artifact> and </artifact> tags. No commentary outside the tags.",
+    ].join(" ");
+    if (previousCode) {
+      instruction += ` Your PREVIOUS attempt had this problem: ${fixNote || "render failure"}. Previous code:\n${String(previousCode).slice(0, 8000)}\nReturn the FULL corrected artifact.`;
+    }
+    const gskRes = await gskMCPRequest("/mcp/chat", { message: instruction, context: "[FORGE BUILD MODE]" }, 90000);
+    const reply = String((gskRes as any)?.result?.response || (gskRes as any)?.response || "");
+    let code = "";
+    const tagMatch = reply.match(/<artifact>([\s\S]*?)<\/artifact>/i);
+    if (tagMatch) {
+      code = tagMatch[1].trim();
+    } else {
+      const fence = reply.match(/```(?:html)?\s*([\s\S]*?)```/i);
+      if (fence && /<html|<!doctype|<div|<canvas|<script/i.test(fence[1])) {
+        code = fence[1].trim();
+      } else if (/<html|<!doctype/i.test(reply)) {
+        const h = reply.indexOf("<"); 
+        code = reply.slice(h).trim();
+      }
+    }
+    if (!code || code.length < 40) {
+      return res.json({ success: false, error: "GSK did not produce a valid artifact", raw: reply.slice(0, 500) });
+    }
+    if (!/<script|<style|<div|<canvas|<body/i.test(code)) {
+      return res.json({ success: false, error: "artifact lacks executable structure", raw: reply.slice(0, 300) });
+    }
+    const id = `forge_${Date.now().toString(36)}`;
+    const file = path.join(FORGE_DIR, `${id}.html`);
+    fs.writeFileSync(file, code, "utf8");
+    console.log(`[FORGE] Artifact built by GSK: ${id}.html (${code.length} bytes)`);
+    res.json({ success: true, id, url: `/artifacts/${id}.html`, bytes: code.length });
+  } catch (err: any) {
+    res.json({ success: false, error: err.message });
+  }
+});
+
+app.get("/artifacts/:name", (req, res) => {
+  const name = String(req.params.name || "").replace(/[^a-zA-Z0-9_.\-]/g, "");
+  const file = path.join(FORGE_DIR, name);
+  if (!fs.existsSync(file)) return res.status(404).send("artifact not found");
+  res.setHeader("Content-Type", "text/html");
+  res.send(fs.readFileSync(file, "utf8"));
+});
+
 // System Status
 app.get("/api/system/status", async (req, res) => {
   try {
