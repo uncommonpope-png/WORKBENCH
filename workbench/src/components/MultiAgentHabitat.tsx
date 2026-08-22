@@ -375,64 +375,74 @@ ${newSessionParticipants.map(id => `- *${agents.find(a => a.id === id)?.name || 
     setInputMessage("");
     setIsSynthesizingSession(true);
 
-    // AI Multi-Agent reasoning chain simulation loop!
-    try {
-      // Step 1: Filter session participating agents
-      const activeParticipants = agents.filter(a => activeSession.participants.includes(a.id));
-      if (activeParticipants.length === 0) {
-        setIsSynthesizingSession(false);
-        return;
-      }
-
-      // First Responder in sequence
-      await new Promise(resolve => setTimeout(resolve, 1500));
-      const responder1 = activeParticipants.find(a => a.id === selectedAgentId) || activeParticipants[0];
-      
-      const chunk1: MultiAgentMessage = {
-        id: `m-resp1-${Date.now()}`,
-        senderName: responder1.name,
-        avatarColor: responder1.avatarColor,
-        text: `🤖 **[${responder1.name} CORE RESPONSE]**
-Evaluating directives against operational parameters. As my priority matches **${responder1.role}**, I propose compiling this trace to check the local token balance.
-
-Let's inspect dependencies. What are your outputs on this context, team?`,
-        timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
-      };
-
-      setSessions(prev => prev.map(s => {
-        if (s.id === currSessionId) {
-          return { ...s, logs: [...s.logs, chunk1] };
+      // REAL multi-agent reasoning: each participant answers through GSK's brain
+      try {
+        // Step 1: Filter session participating agents
+        const activeParticipants = agents.filter(a => activeSession.participants.includes(a.id));
+        if (activeParticipants.length === 0) {
+          setIsSynthesizingSession(false);
+          return;
         }
-        return s;
-      }));
 
-      // Step 2: Next responder in sequence chimes in to collaborate
-      const others = activeParticipants.filter(a => a.id !== responder1.id);
-      if (others.length > 0) {
-        await new Promise(resolve => setTimeout(resolve, 2000));
-        const responder2 = others[Math.floor(Math.random() * others.length)];
-        
-        const chunk2: MultiAgentMessage = {
-          id: `m-resp2-${Date.now()}`,
-          senderName: responder2.name,
-          avatarColor: responder2.avatarColor,
-          text: `⚙️ **[COLLABORATIVE EXPANSION: ${responder2.name}]**
-Reviewing proposed audit coordinates from ${responder1.name}. I agree! 
+        const askGsk = async (agentName: string, agentRole: string, prior?: { name: string; text: string }): Promise<string> => {
+          const msg = `You are ${agentName}, an autonomous agent whose role is ${agentRole}. The director sends this directive to the agent team: "${directive}".` +
+            (prior ? ` A teammate (${prior.name}) just said: "${prior.text.slice(0, 400)}". Respond to their point and build on it.` : " Respond first.") +
+            ` Stay in character. Reply in 2-4 sentences with one concrete next action. No preamble.`;
+          try {
+            const r = await fetch("/api/copilot/chat", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ message: msg, history: [] }),
+            });
+            const data = await r.json();
+            return String(data?.text || "(static on the line...)");
+          } catch {
+            return "(connection static...)";
+          }
+        };
 
-By checking the *Secure API Token Vault* metrics, we confirm that if production level endpoints are empty, we route clean Mock outputs seamlessly to shield real-world pipelines. No simulator violations detected. Ready to deploy!`,
+        const responder1 = activeParticipants.find(a => a.id === selectedAgentId) || activeParticipants[0];
+        const text1 = await askGsk(responder1.name, responder1.role);
+
+        const chunk1: MultiAgentMessage = {
+          id: `m-resp1-${Date.now()}`,
+          senderName: responder1.name,
+          avatarColor: responder1.avatarColor,
+          text: text1,
           timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
         };
 
         setSessions(prev => prev.map(s => {
           if (s.id === currSessionId) {
-            return { ...s, logs: [...s.logs, chunk2] };
+            return { ...s, logs: [...s.logs, chunk1] };
           }
           return s;
         }));
-      }
 
-    } catch (e) {
-      console.error(e);
+        // Step 2: a second participant builds on the first — real dialogue through GSK
+        const others = activeParticipants.filter(a => a.id !== responder1.id);
+        if (others.length > 0) {
+          const responder2 = others[Math.floor(Math.random() * others.length)];
+          const text2 = await askGsk(responder2.name, responder2.role, { name: responder1.name, text: text1 });
+
+          const chunk2: MultiAgentMessage = {
+            id: `m-resp2-${Date.now()}`,
+            senderName: responder2.name,
+            avatarColor: responder2.avatarColor,
+            text: text2,
+            timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
+          };
+
+          setSessions(prev => prev.map(s => {
+            if (s.id === currSessionId) {
+              return { ...s, logs: [...s.logs, chunk2] };
+            }
+            return s;
+          }));
+        }
+
+      } catch (e) {
+        console.error(e);
     } finally {
       setIsSynthesizingSession(false);
     }

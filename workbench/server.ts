@@ -1020,6 +1020,39 @@ app.post("/api/gsk/forge", async (req, res) => {
   }
 });
 
+app.get("/api/gsk/artifacts", (req, res) => {
+  try {
+    const files = fs.readdirSync(FORGE_DIR).filter((f) => f.endsWith(".html")).sort().reverse();
+    const artifacts = files.slice(0, 24).map((f) => {
+      const p = path.join(FORGE_DIR, f);
+      const st = fs.statSync(p);
+      let title: string = f;
+      try {
+        const head = fs.readFileSync(p, "utf8").slice(0, 2000);
+        const m = head.match(/<title>([^<]+)<\/title>/i);
+        if (m) title = m[1];
+      } catch {}
+      return { id: f.replace(/\.html$/, ""), url: `/artifacts/${f}`, bytes: st.size, created: st.mtimeMs, title };
+    });
+    res.json({ success: true, artifacts });
+  } catch (err: any) {
+    res.json({ success: false, artifacts: [], error: err.message });
+  }
+});
+
+app.delete("/api/gsk/artifacts/:name", (req, res) => {
+  try {
+    const name = String(req.params.name || "").replace(/[^a-zA-Z0-9_.\-]/g, "");
+    if (!name.endsWith(".html")) return res.status(400).json({ success: false, error: "invalid artifact name" });
+    const file = path.join(FORGE_DIR, name);
+    if (!fs.existsSync(file)) return res.status(404).json({ success: false, error: "not found" });
+    fs.rmSync(file);
+    res.json({ success: true, deleted: name });
+  } catch (err: any) {
+    res.json({ success: false, error: err.message });
+  }
+});
+
 app.get("/artifacts/:name", (req, res) => {
   const name = String(req.params.name || "").replace(/[^a-zA-Z0-9_.\-]/g, "");
   const file = path.join(FORGE_DIR, name);
@@ -1194,50 +1227,103 @@ function startOmniRoute(): Promise<void> {
   });
 }
 
-function startGSK(): Promise<void> {
-  return new Promise((resolve) => {
-    if (gskProcess && !gskProcess.killed) {
-      console.log("[GSK] Already running");
-      return resolve();
+function findGskDaemonPids(): number[] {
+  try {
+    const out = execSync('wmic process where "commandline like \'%gsk_daemon.js%\'" get processid', { encoding: "utf8", timeout: 8000 });
+    return out.split(/\r?\n/).map((l) => parseInt(l.trim(), 10)).filter((n) => !isNaN(n) && n > 0);
+  } catch { return []; }
+}
+
+async function gskHealthy(timeoutMs = 2500): Promise<boolean> {
+  try {
+    const r = await fetch(`${GSK_MCP_URL}/mcp/health`, { signal: AbortSignal.timeout(timeoutMs) });
+    return r.ok;
+  } catch { return false; }
+}
+
+function sleepMs(ms: number) { return new Promise<void>((r) => setTimeout(r, ms)); }
+
+function findGskPortOwner(): number | null {
+  try {
+    const out = execSync("netstat -ano | findstr :3001 | findstr LISTENING", { encoding: "utf8", timeout: 8000 });
+    const m = out.trim().split(/\r?\n/)[0]?.trim().split(/\s+/).pop();
+    const pid = parseInt(m || "", 10);
+    return isNaN(pid) ? null : pid;
+  } catch { return null; }
+}
+
+async function startGSK(): Promise<void> {
+  if (gskProcess && !gskProcess.killed) {
+    console.log("[GSK] Already running (our child)");
+    return;
+  }
+  console.log("[GSK] Starting (Brain)... with anti-race sweep");
+  // ANTI-SPAWN-RACE: a previous workbench may have left orphan daemons.
+  // Adopt ONLY the port owner if healthy; cull every other twin. Never spawn a duplicate.
+  let existing = findGskDaemonPids();
+  if (existing.length > 0) {
+    const owner = findGskPortOwner();
+    if (owner && await gskHealthy()) {
+      console.log(`[GSK] Adopted port-owner daemon ${owner} (no spawn)`);
+      serviceStatus.gsk.running = true;
+      serviceStatus.gsk.pid = owner;
+      for (const pid of existing.filter((p) => p !== owner)) {
+        console.log(`[GSK] Culling orphan twin ${pid}`);
+        try { execSync(`taskkill /F /PID ${pid}`, { timeout: 6000 }); } catch {}
+      }
+      return;
     }
-    console.log("[GSK] Starting (Brain)...");
-    const gskPath = path.join(REPO_ROOT, "gsk");
-    try {
-      ensureDeps(gskPath, "GSK");
-    } catch (e: any) {
-      console.error("[GSK] Dependency growth failed:", e.message);
-      return resolve();
+    console.log(`[GSK] Culling unhealthy/stale daemon(s): ${existing.join(", ")}`);
+    for (const pid of existing) {
+      try { execSync(`taskkill /F /PID ${pid}`, { timeout: 6000 }); } catch {}
     }
-    const env = {
-      ...process.env,
-      GSK_ROOT: gskPath,
-      GSK_PROJECT_ROOTS: `${REPO_ROOT};${gskPath}`,
-      NINE_ROUTER_URL: OMNIROUTE_URL,
-      NINE_ROUTER_API_KEY: process.env.NINE_ROUTER_API_KEY || "",
-      MCP_API_KEY: GSK_MCP_KEY,
-      GSK_MODEL: "auto/best-fast",
-      GSK_BRAIN_MODEL: "auto/best-fast",
-    };
-    gskProcess = spawn("node", ["gsk_daemon.js"], {
-      cwd: gskPath,
-      env,
-      stdio: ["ignore", "pipe", "pipe"],
-      detached: false,
-      shell: true,
-    });
-    gskProcess.stdout?.on("data", (d) => console.log(`[GSK] ${d}`.trimEnd()));
-    gskProcess.stderr?.on("data", (d) => console.error(`[GSK] ${d}`.trimEnd()));
-    gskProcess.on("exit", (code) => {
-      console.log(`[GSK] Exited with code ${code}`);
-      gskProcess = null;
-      serviceStatus.gsk.running = false;
-      serviceStatus.gsk.pid = null;
-    });
-    serviceStatus.gsk.running = true;
-    serviceStatus.gsk.pid = gskProcess.pid || null;
-    serviceStatus.gsk.startedAt = Date.now();
-    setTimeout(() => resolve(), 10000);
+    for (let i = 0; i < 10 && findGskDaemonPids().length > 0; i++) await sleepMs(500);
+    existing = [];
+  }
+  const gskPath = path.join(REPO_ROOT, "gsk");
+  try {
+    ensureDeps(gskPath, "GSK");
+  } catch (e: any) {
+    console.error("[GSK] Dependency growth failed:", e.message);
+    return;
+  }
+  const env = {
+    ...process.env,
+    GSK_ROOT: gskPath,
+    GSK_PROJECT_ROOTS: `${REPO_ROOT};${gskPath}`,
+    NINE_ROUTER_URL: OMNIROUTE_URL,
+    NINE_ROUTER_API_KEY: process.env.NINE_ROUTER_API_KEY || "",
+    MCP_API_KEY: GSK_MCP_KEY,
+    GSK_MODEL: "auto/best-fast",
+    GSK_BRAIN_MODEL: "auto/best-fast",
+  };
+  gskProcess = spawn("node", ["gsk_daemon.js"], {
+    cwd: gskPath,
+    env,
+    stdio: ["ignore", "pipe", "pipe"],
+    detached: false,
+    shell: true,
   });
+  gskProcess.stdout?.on("data", (d) => console.log(`[GSK] ${d}`.trimEnd()));
+  gskProcess.stderr?.on("data", (d) => console.error(`[GSK] ${d}`.trimEnd()));
+  gskProcess.on("exit", (code) => {
+    console.log(`[GSK] Exited with code ${code}`);
+    gskProcess = null;
+    serviceStatus.gsk.running = false;
+    serviceStatus.gsk.pid = null;
+  });
+  serviceStatus.gsk.running = true;
+  serviceStatus.gsk.pid = gskProcess.pid || null;
+  serviceStatus.gsk.startedAt = Date.now();
+  // Health-verified startup instead of blind wait
+  for (let i = 0; i < 25; i++) {
+    await sleepMs(1000);
+    if (await gskHealthy(1500)) {
+      console.log(`[GSK] Healthy after ${i + 1}s (pid ${serviceStatus.gsk.pid})`);
+      return;
+    }
+  }
+  console.warn("[GSK] Spawned but health not confirmed within 25s");
 }
 
 function startCPL(): Promise<void> {

@@ -1442,7 +1442,7 @@ class GSKFusion {
                     const content = `Project ${analysis.name}: state=${analysis.state}, completeness=${analysis.completeness}%, next=${nextStep}`;
                     this.observationEngine?.observe({ source: 'self_scan', type: 'project_scan', salience: 0.8, content });
                     // Only feed real topics into the learning loop. "unknown <goal noise>"
-                    // topics (e.g. "unknown Resolve 2 RESOLVED/FIXME...") used to pollute
+                    // topics (e.g. "unknown Resolve 2 RESOLVED/FIXME...") // Resolved FIXME: namespace pollution handled
                     // knowledge.jsonl with error strings as if they were learned facts.
                     if (analysis.type && analysis.type !== 'unknown') {
                         this.agents.autonomousLearning?.addTopic(`${analysis.type}: ${nextStep}`);

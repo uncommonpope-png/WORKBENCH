@@ -243,30 +243,37 @@ class Brain {
             this._thinkInProgress = false;
         }
 
-        // 9Router via localhost:20128 — through global BrainGate
+        // 9Router via localhost:20128 — USER CHAT BYPASSES THE GATE.
+        // Priority (user-facing) thinks must NEVER wait on an in-flight
+        // autonomous generation. Background thoughts still serialize through
+        // the global gate to prevent router flooding.
+        if (!priority) {
+            try {
+                await _globalBrainGate.acquire(false);
+            } catch (e) {
+                // Gate was preempted by chat priority — return null, autonomous caller backs off
+                console.log('[Brain] Gate preempted by chat priority');
+                return null;
+            }
+        }
         this._thinkInProgress = true;
         try {
-            await _globalBrainGate.acquire(priority);
-            try {
-                const result = await this._nineRouter(prompt, soul_context);
-                if (result) {
-                    this._brainFailures = 0;
-                    this._brainCooldownUntil = 0;
-                    this._lastThinkUsedFallback = false;
-                    return result;
-                } else {
-                    console.error('[Brain] _nineRouter returned falsy result:', result);
-                }
-            } catch (e) {
-                console.log(`[Brain] 9Router failed: ${e.message}`);
-                console.error('[Brain] _nineRouter threw exception:', e);
-            } finally {
-                _globalBrainGate.release();
+            const result = await this._nineRouter(prompt, soul_context);
+            if (result) {
+                this._brainFailures = 0;
+                this._brainCooldownUntil = 0;
+                this._lastThinkUsedFallback = false;
+                return result;
+            } else {
+                console.error('[Brain] _nineRouter returned falsy result:', result);
             }
         } catch (e) {
-            // Gate was preempted by chat priority — return null, autonomous caller backs off
-            console.log('[Brain] Gate preempted by chat priority');
+            console.log(`[Brain] 9Router failed: ${e.message}`);
+            console.error('[Brain] _nineRouter threw exception:', e);
         } finally {
+            if (!priority) {
+                _globalBrainGate.release();
+            }
             this._thinkInProgress = false;
         }
 

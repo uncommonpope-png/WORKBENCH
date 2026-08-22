@@ -54,6 +54,32 @@ export const GskMindTab: React.FC<GskMindTabProps> = ({ accentColor }) => {
   const [forgeInfo, setForgeInfo] = useState<string>("");
   const [forgePrevCode, setForgePrevCode] = useState<string>("");
   const [forging, setForging] = useState(false);
+  const [gallery, setGallery] = useState<Array<{ id: string; url: string; bytes: number; created: number; title: string }>>([]);
+
+  const loadGallery = async () => {
+    try {
+      const r = await fetch("/api/gsk/artifacts").then((x) => x.json());
+      if (r.success) setGallery(r.artifacts || []);
+    } catch {}
+  };
+
+  useEffect(() => {
+    loadGallery();
+  }, []);
+
+  const viewArtifact = (url: string) => {
+    setForgeUrl(url);
+    setForgeInfo("Viewing artifact from gallery.");
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
+
+  const deleteArtifact = async (id: string) => {
+    try {
+      await fetch(`/api/gsk/artifacts/${id}.html`, { method: "DELETE" });
+      setGallery((g) => g.filter((a) => a.id !== id));
+      if (forgeUrl.includes(id)) setForgeUrl("");
+    } catch {}
+  };
 
   const forge = async (fixNote?: string) => {
     const p = forgePrompt.trim();
@@ -235,6 +261,39 @@ export const GskMindTab: React.FC<GskMindTabProps> = ({ accentColor }) => {
 
       {status && (
         <div className="p-3 bg-slate-950/50 border border-purple-500/30 rounded-xl text-sm font-mono text-purple-300">{status}</div>
+      )}
+
+      {/* ARTIFACT GALLERY */}
+      {gallery.length > 0 && (
+        <div className="p-4 bg-slate-950/50 border border-slate-800/60 rounded-2xl">
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="font-bold text-white flex items-center gap-2">
+              <Lightbulb className="w-5 h-5" style={{ color: accentColor }} />
+              Artifact Gallery ({gallery.length})
+            </h3>
+            <button onClick={loadGallery} className="px-2 py-1 bg-slate-900 border border-slate-700 rounded-lg text-[10px] font-mono text-slate-400 hover:text-white">Refresh</button>
+          </div>
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3 max-h-96 overflow-y-auto pr-1">
+            {gallery.map((a) => (
+              <div key={a.id} className={`group relative rounded-xl border transition-all cursor-pointer ${forgeUrl.includes(a.id) ? "border-purple-500/50" : "border-slate-800 hover:border-purple-500/30"}`} onClick={() => viewArtifact(a.url)}>
+                <div className="relative h-28 overflow-hidden rounded-t-xl bg-slate-950 pointer-events-none">
+                  <iframe src={a.url} sandbox="allow-scripts" loading="lazy" title={a.id} className="absolute top-0 left-0 w-[300%] h-[300%] origin-top-left scale-[0.3333] border-0" />
+                </div>
+                <div className="p-2">
+                  <p className="text-xs font-bold text-white truncate">{a.title}</p>
+                  <p className="text-[10px] text-slate-500 font-mono">{(a.bytes / 1024).toFixed(1)}KB · {new Date(a.created).toLocaleTimeString()}</p>
+                </div>
+                <button
+                  onClick={(e) => { e.stopPropagation(); deleteArtifact(a.id); }}
+                  title="Delete artifact"
+                  className="absolute top-1 right-1 opacity-0 group-hover:opacity-100 px-1.5 py-0.5 bg-red-950/90 border border-red-500/40 rounded text-[10px] text-red-400 hover:text-red-300 transition-opacity"
+                >
+                  X
+                </button>
+              </div>
+            ))}
+          </div>
+        </div>
       )}
 
       {/* THOUGHT STREAM */}

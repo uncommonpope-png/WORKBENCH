@@ -1,25 +1,52 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Profit Bible - PLT Real-Time Dashboard</title>
-  <style>
-    body { font-family: monospace; background: #0f172a; color: #f8fafc; margin: 0; padding: 20px; }
-    .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-top: 20px; }
-    .card { background: #1e293b; border: 1px solid #334155; border-radius: 8px; padding: 16px; }
-    .metric { font-size: 24px; font-weight: bold; margin-top: 8px; }
-  </style>
+<meta charset="UTF-8">
+<title>PLT Sovereign & Emergence Visualizer</title>
+<script src="https://unpkg.com/three@0.160.0/build/three.min.js"></script>
+<style>
+body { margin:0; overflow:hidden; background:#030308; color:#fff; font-family:sans-serif; }
+#ui { position:absolute; top:10px; left:10px; z-index:10; background:rgba(0,0,0,0.7); padding:15px; border-radius:8px; border:1px solid #333; }
+.metric { margin-bottom:8px; font-size:14px; }
+.val { font-weight:bold; color:#00ffcc; }
+</style>
 </head>
 <body>
-  <h1>Profit Bible - Sovereign PLT & System Evolution Dashboard</h1>
-  <div id="metrics-root" class="grid">
-    <div class="card"><div>PROFIT SCORE</div><div id="profit-val" class="metric">0.90</div></div>
-    <div class="card"><div>LOVE SCORE</div><div id="love-val" class="metric">0.85</div></div>
-    <div class="card"><div>TAX SCORE</div><div id="tax-val" class="metric">0.05</div></div>
-  </div>
-  <script>
-    console.log("PLT Dashboard Initialized");
-  </script>
+<div id="ui">
+  <h3>Sovereign PLT & Emergence Dashboard</h3>
+  <div class="metric">Profit: <span class="val" id="m-profit">0.90</span></div>
+  <div class="metric">Love: <span class="val" id="m-love">0.85</span></div>
+  <div class="metric">Tax: <span class="val" id="m-tax">0.05</span></div>
+  <div class="metric">Valence: <span class="val" id="m-valence">0.24</span></div>
+  <div class="metric">Emergence Stage: <span class="val" id="m-stage">INTEGRATION</span></div>
+</div>
+<div id="canvas-container"></div>
+<script>
+const scene = new THREE.Scene();
+const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+camera.position.z = 5;
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setSize(window.innerWidth, window.innerHeight);
+document.getElementById('canvas-container').appendChild(renderer.domElement);
+
+const geometry = new THREE.BoxGeometry(1.5, 1.5, 1.5);
+const material = new THREE.MeshBasicMaterial({ color: 0x00ffcc, wireframe: true });
+const cube = new THREE.Mesh(geometry, material);
+scene.add(cube);
+
+function animate() {
+  requestAnimationFrame(animate);
+  cube.rotation.x += 0.01;
+  cube.rotation.y += 0.01;
+  renderer.render(scene, camera);
+}
+animate();
+
+window.addEventListener('resize', () => {
+  camera.aspect = window.innerWidth / window.innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(window.innerWidth, window.innerHeight);
+});
+</script>
 </body>
 </html>

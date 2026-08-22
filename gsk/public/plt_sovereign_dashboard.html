@@ -2,17 +2,60 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<title>Sovereign PLT Metric Dashboard</title>
-<style>body { background: #0a0a10; color: #e0e0e0; font-family: monospace; padding: 20px; }</style>
+<title>Sovereign PLT & Emergence Visualizer</title>
+<style>
+  body { margin: 0; background: #05050a; color: #00ffcc; font-family: monospace; display: flex; flex-direction: column; height: 100vh; overflow: hidden; }
+  #canvas-container { flex: 1; width: 100%; position: relative; }
+  .hud-panel { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1rem; padding: 1rem; background: rgba(10,10,20,0.85); border-top: 1px solid #00ffcc; }
+  .metric-card { border: 1px solid rgba(0,255,204,0.3); padding: 0.75rem; border-radius: 4px; }
+  .val { font-size: 1.4rem; font-weight: bold; color: #ffffff; }
+</style>
 </head>
 <body>
-<h1>Sovereign PLT Cognitive Evolution & Value Dashboard</h1>
-<div id="metrics-grid"></div>
+<div id="canvas-container"></div>
+<div class="hud-panel">
+  <div class="metric-card"><div>PROFIT (P)</div><div id="p-val" class="val">0.90</div></div>
+  <div class="metric-card"><div>LOVE (L)</div><div id="l-val" class="val">0.85</div></div>
+  <div class="metric-card"><div>TAX (T)</div><div id="t-val" class="val">0.05</div></div>
+  <div class="metric-card"><div>EMERGENCE VALENCE</div><div id="v-val" class="val">0.24</div></div>
+</div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <script>
-// Sovereign PLT Engine Init
-console.log('PLT Sovereign Dashboard initialized');
-const pltData = { profit: 0.9, love: 0.85, tax: 0.1, score: 1.65 };
-document.getElementById('metrics-grid').innerHTML = '<pre>' + JSON.stringify(pltData, null, 2) + '</pre>';
+const container = document.getElementById('canvas-container');
+const scene = new THREE.Scene();
+const camera = new THREE.PerspectiveCamera(75, container.clientWidth / container.clientHeight, 0.1, 1000);
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setSize(container.clientWidth, container.clientHeight);
+container.appendChild(renderer.domElement);
+
+const particleCount = 1500;
+const geometry = new THREE.BufferGeometry();
+const positions = new Float32Array(particleCount * 3);
+const colors = new Float32Array(particleCount * 3);
+
+for(let i = 0; i < particleCount * 3; i += 3) {
+  positions[i] = (Math.random() - 0.5) * 12;
+  positions[i+1] = (Math.random() - 0.5) * 12;
+  positions[i+2] = (Math.random() - 0.5) * 12;
+  colors[i] = 0.0;
+  colors[i+1] = 1.0;
+  colors[i+2] = 0.8;
+}
+geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+
+const material = new THREE.PointsMaterial({ size: 0.06, vertexColors: true, transparent: true, opacity: 0.8 });
+const particleSystem = new THREE.Points(geometry, material);
+scene.add(particleSystem);
+camera.position.z = 7;
+
+function animate() {
+  requestAnimationFrame(animate);
+  particleSystem.rotation.y += 0.003;
+  particleSystem.rotation.x += 0.001;
+  renderer.render(scene, camera);
+}
+animate();
 </script>
 </body>
 </html>

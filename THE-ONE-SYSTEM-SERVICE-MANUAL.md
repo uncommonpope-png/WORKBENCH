@@ -737,3 +737,13 @@ Also fixed: TransactionsTab hardcoded TX-1049s replaced with real soul-ledger hy
 - GSK autonomously spawns duplicate daemons during restart races — cull orphans after each restart cycle (check 
 ode processes not owning :3000/:3001/:20128)
 - Simulation tabs still contain canned visual loops (AgentSimulator/Habitat chatter) but their DATA endpoints are now real
+
+## 19.6 Session Addendum - Gallery, Anti-Race Conductor, Real Habitat, Gate Bypass
+
+**Artifact Gallery**: GET/DELETE /api/gsk/artifacts; grid of live scaled iframe thumbnails with title+size+delete, click-to-view in Forge frame. First entry: PLT Sovereign Pyramid Visualizer.
+
+**Anti-Spawn-Race Conductor**: startGSK() now (1) finds all node gsk_daemon.js processes via wmic, (2) identifies the :3001 port owner via netstat, (3) if owner healthy -> ADOPT it and CULL every orphan twin, (4) only spawns when no healthy owner exists, then health-verifies up to 25s. Proven: restart adopted PID 9888 and culled twins 8732/14960/14904 -> daemon count 1.
+
+**Habitat is Real**: MultiAgentHabitat's canned two-chatter replaced - each participant now answers through /api/copilot/chat (GSK brain), second agent builds on the first's actual words.
+
+**BrainGate Bypass (second root cure)**: mega_brain.think() previously made user chat wait behind the process-wide _globalBrainGate whenever an autonomous generation was in-flight (30-90s stalls -> "(silence)"). Priority thinks now bypass the gate entirely; background thoughts still serialize to prevent router flooding. Measured: VOLT persona answered in 2.0s through full stack while autonomy active.
