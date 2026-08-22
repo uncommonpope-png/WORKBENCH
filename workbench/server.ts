@@ -532,6 +532,132 @@ app.post("/api/gsk/memories", async (req, res) => {
   }
 });
 
+// ─── GSK Mind: thoughts, proposals, injection ───
+app.get("/api/gsk/thoughts", async (req, res) => {
+  try {
+    const response = await gskMCPRequest("/mcp/execute", {
+      method: "memory.query",
+      params: { type: "mcp_chat", limit: 15 },
+    }, 6000);
+    const raw = (response as any)?.result?.memories || (response as any)?.memories || [];
+    const thoughts = (Array.isArray(raw) ? raw : []).map((m: any) => ({
+      type: m.type || "thought",
+      summary: String(m.summary ?? m.content ?? m.text ?? "").slice(0, 400),
+      timestamp: Number(m.timestamp || m.createdAt || Date.now()),
+    }));
+    res.json({ success: true, thoughts });
+  } catch (err: any) {
+    res.json({ success: false, thoughts: [], error: err.message });
+  }
+});
+
+app.get("/api/gsk/proposals", async (req, res) => {
+  try {
+    let pending: any = null;
+    try {
+      pending = await gskMCPRequest("/mcp/execute", { method: "autonomy.pending", params: {} }, 6000);
+    } catch {}
+    if (!pending || pending.error) {
+      try {
+        pending = await gskMCPRequest("/mcp/execute", { method: "autonomy.plans", params: {} }, 6000);
+      } catch {}
+    }
+    const raw = (pending as any)?.result?.plans || (pending as any)?.result?.pending || (pending as any)?.result || [];
+    const proposals = (Array.isArray(raw) ? raw : []).map((p: any) => ({
+      id: p.id || p.plan_id || `prop-${Date.now()}`,
+      title: p.title || p.description || p.goal || String(p).slice(0, 120),
+      description: p.description || p.goal || "",
+      risk: p.risk || "normal",
+      status: p.status || "pending",
+      createdAt: p.createdAt || p.created_at || null,
+    }));
+    res.json({ success: true, proposals });
+  } catch (err: any) {
+    res.json({ success: false, proposals: [], error: err.message });
+  }
+});
+
+app.post("/api/gsk/proposals/approve", async (req, res) => {
+  try {
+    const { id } = req.body || {};
+    if (!id) return res.status(400).json({ success: false, error: "id required" });
+    const r = await gskMCPRequest("/mcp/execute", { method: "autonomy.approve", params: { id } }, 8000);
+    res.json({ success: !(r as any)?.error, result: (r as any)?.result || null });
+  } catch (err: any) {
+    res.json({ success: false, error: err.message });
+  }
+});
+
+app.post("/api/gsk/proposals/deny", async (req, res) => {
+  try {
+    const { id } = req.body || {};
+    if (!id) return res.status(400).json({ success: false, error: "id required" });
+    const r = await gskMCPRequest("/mcp/execute", { method: "autonomy.deny", params: { id } }, 8000);
+    res.json({ success: !(r as any)?.error, result: (r as any)?.result || null });
+  } catch (err: any) {
+    res.json({ success: false, error: err.message });
+  }
+});
+
+app.post("/api/gsk/inject/knowledge", async (req, res) => {
+  try {
+    const { title, content, url } = req.body || {};
+    let body = typeof content === "string" ? content : "";
+    if (!body && url) {
+      if (!/^https?:\/\//i.test(url)) return res.status(400).json({ success: false, error: "url must be http(s)" });
+      const resp = await fetch(url, { signal: AbortSignal.timeout(10000) });
+      const html = await resp.text();
+      body = html
+        .replace(/<script[\s\S]*?<\/script>/gi, " ")
+        .replace(/<style[\s\S]*?<\/style>/gi, " ")
+        .replace(/<[^>]+>/g, " ")
+        .replace(/\s+/g, " ")
+        .trim()
+        .slice(0, 20000);
+    }
+    if (!body || !body.trim()) return res.status(400).json({ success: false, error: "content or url required" });
+    const label = title || url || "injected knowledge";
+    const stored = { witness: false };
+    try {
+      const r = await gskMCPRequest("/mcp/execute", {
+        method: "memory.witness",
+        params: {
+          content: `[KNOWLEDGE INJECTION] ${label}\n\n${body.slice(0, 18000)}`,
+          type: "knowledge",
+          weight: 0.8,
+          tags: ["workbench", "injection"],
+        },
+      }, 10000);
+      stored.witness = !(r as any)?.error;
+    } catch {}
+    res.json({ success: true, stored: stored.witness, chars: body.length, label });
+  } catch (err: any) {
+    res.json({ success: false, error: err.message });
+  }
+});
+
+const SKILLS_DIR = path.join(__dirname, "..", "gsk", "gsk-core", "skills");
+app.post("/api/gsk/inject/skill", async (req, res) => {
+  try {
+    const { name, code } = req.body || {};
+    if (typeof name !== "string" || !/^[a-zA-Z0-9_-]{2,48}$/.test(name)) {
+      return res.status(400).json({ success: false, error: "name must be 2-48 chars [a-zA-Z0-9_-]" });
+    }
+    if (typeof code !== "string" || code.length < 10 || code.length > 50000) {
+      return res.status(400).json({ success: false, error: "code must be 10-50000 chars" });
+    }
+    if (!code.includes("module.exports") || !code.includes("execute")) {
+      return res.status(400).json({ success: false, error: "skill must export execute (module.exports.execute)" });
+    }
+    const file = path.join(SKILLS_DIR, `${name}.js`);
+    fs.writeFileSync(file, code, "utf8");
+    console.log(`[MIND] Skill injected: ${file} (${code.length} bytes)`);
+    res.json({ success: true, file: file, name });
+  } catch (err: any) {
+    res.json({ success: false, error: err.message });
+  }
+});
+
 // System Status
 app.get("/api/system/status", async (req, res) => {
   try {

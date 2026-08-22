@@ -20,6 +20,7 @@ import { JournalTab } from "./components/JournalTab";
 import { CombosTab } from "./components/CombosTab";
 import { OmniRouteTab } from "./components/OmniRouteTab";
 import { TelephoneTab } from "./components/TelephoneTab";
+import { GskMindTab } from "./components/GskMindTab";
 import { GskChatTab } from "./components/GskChatTab";
 import { 
   Plus, 
@@ -76,7 +77,7 @@ export default function App() {
   });
 
   const [skills, setSkills] = useState<Skill[]>(INITIAL_SKILLS);
-  const [activeTab, setActiveTab] = useState<"gsk" | "capabilities" | "profile" | "skills" | "simulation" | "integrations" | "realism" | "vault" | "habitat" | "marketplace" | "transactions" | "profitPrime" | "roles" | "journal" | "combos" | "omniroute" | "telephone">("gsk");
+  const [activeTab, setActiveTab] = useState<"gsk" | "capabilities" | "profile" | "skills" | "simulation" | "integrations" | "realism" | "vault" | "habitat" | "marketplace" | "transactions" | "profitPrime" | "roles" | "journal" | "combos" | "omniroute" | "telephone" | "mind">("gsk");
   const [strictRealismMode, setStrictRealismMode] = useState<boolean>(false);
   const [isExportModalOpen, setIsExportModalOpen] = useState<boolean>(false);
   const [copiedConfig, setCopiedConfig] = useState<boolean>(false);
@@ -584,6 +585,22 @@ export default function App() {
             11. GSK Telephone
           </button>
 
+          <button
+            onClick={() => setActiveTab("mind")}
+            className={`flex items-center gap-2 px-4 py-2 border rounded-xl text-xs font-mono tracking-wider uppercase transition-all duration-300 whitespace-nowrap cursor-pointer hover:scale-[1.03] active:scale-95 ${
+              activeTab === "mind"
+                ? "bg-slate-950 text-white font-bold border-slate-650"
+                : "border-transparent text-slate-400 hover:text-slate-200 hover:bg-slate-800/30"
+            }`}
+            style={{
+              borderColor: activeTab === "mind" ? profile.avatarColor : undefined,
+              boxShadow: activeTab === "mind" ? `0 0 16px ${profile.avatarColor}25, inset 0 0 8px ${profile.avatarColor}10` : undefined,
+            }}
+          >
+            <Brain className="w-4 h-4" style={{ color: profile.avatarColor }} />
+            12. GSK Mind
+          </button>
+
         </div>
 
         <div>
@@ -854,6 +871,12 @@ export default function App() {
               providerConfig={providerConfig}
               profile={profile}
             />
+          </div>
+        )}
+
+        {activeTab === "mind" && (
+          <div className="flex-1">
+            <GskMindTab accentColor={profile.avatarColor} />
           </div>
         )}
       </main>
