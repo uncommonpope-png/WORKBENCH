@@ -227,7 +227,7 @@ export const MatrixBackground: React.FC<MatrixBackgroundProps> = ({ accentColor 
     <div
       ref={containerRef}
       id="matrix-app-backdrop"
-      className="absolute inset-0 w-full h-full overflow-hidden bg-[#05050c] select-none pointer-events-none"
+      className="absolute inset-0 w-full h-full overflow-hidden bg-[#05050c] select-none pointer-events-none z-0"
     >
       {/* 1. STARFIELD PARTICLES */}
       <div className="absolute inset-0 bg-[radial-gradient(rgba(255,255,255,0.1)_1px,transparent_1px)] [background-size:24px_24px] opacity-40" />

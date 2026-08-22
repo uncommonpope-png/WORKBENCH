@@ -2,29 +2,13 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<title>Unified PLT Dashboard</title>
-<style>
-body { font-family: system-ui, sans-serif; background: #0f172a; color: #f8fafc; margin: 0; padding: 20px; }
-.grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 20px; }
-.card { background: #1e293b; border-radius: 8px; padding: 16px; border: 1px solid #334155; }
-.value { font-size: 2em; font-weight: bold; color: #38bdf8; }
-</style>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Real-Time PLT Yield & Tax Optimization Dashboard</title>
 </head>
 <body>
-<h1>Unified PLT Global Workspace Dashboard</h1>
-<div id="app" class="grid"></div>
-<script>
-const state = { profit: 100, love: 85, tax: 15, gwtIgnited: true };
-function calculatePLT(s) { return s.profit + s.love - s.tax; }
-function render() {
-  const app = document.getElementById('app');
-  app.innerHTML = `
-    <div class="card"><h3>Profit (Growth)</h3><div class="value">${state.profit}</div></div>
-    <div class="card"><h3>Love (Cohesion)</h3><div class="value">${state.love}</div></div>
-    <div class="card"><h3>Tax (Friction)</h3><div class="value">${state.tax}</div></div>
-    <div class="card"><h3>True Net Value</h3><div class="value">${calculatePLT(state)}</div></div>
-    <div class="card"><h3>GWT Broadcast Ignition</h3><div class="value">${state.gwtIgnited ? 'IGNITED' : 'IDLE'}</div></div>
-  `;
-}
-render();
-</script></body></html>
+<div id="app">
+  <h1>PLT Value Calculation & Tax Optimization</h1>
+  <div id="metrics-panel"></div>
+</div>
+</body>
+</html>

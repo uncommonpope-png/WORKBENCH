@@ -365,7 +365,7 @@ Workbench (React) → server.ts (Express) → GSK MCP (:3001) → GSK Core Syste
 | Problem | Fix | Status |
 |---------|-----|--------|
 | GSK daemon not starting | Created `boot-gsk.cjs` with env vars, `gsk-harness.cjs` for management | ✅ RUNNING |
-| MCP regex bug | Balanced-brace parser replaces naive `[^}]*` | ✅ RESOLVED |
+| MCP regex bug | Balanced-brace parser replaces naive `[^}]*` | ✅ RESOLVED & VERIFIED (COMPLETED) |
 | MCP bind 0.0.0.0 | Changed to 127.0.0.1 | ✅ FIXED |
 | OmniRouterService mocked | Replaced with real fetch() to OmniRoute :20128 | ✅ FIXED |
 | Brain "model: unknown" | Fixed to check `_model`, `userBrain._model`, env fallback | ✅ FIXED |
