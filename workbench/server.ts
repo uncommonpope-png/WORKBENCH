@@ -228,6 +228,9 @@ app.get("/api/gsk/events", async (req, res) => {
   res.flushHeaders();
   res.write(`data: ${JSON.stringify({ type: "connected", message: "SSE connected" })}\n\n`);
 
+  let lastSeen = Date.now();
+  const sentHashes = new Set<string>();
+
   const interval = setInterval(async () => {
     try {
       const mem = await gskMCPRequest("/mcp/execute", {
@@ -243,7 +246,15 @@ app.get("/api/gsk/events", async (req, res) => {
       }
 
       const items = parsed.success ? parsed.data : (Array.isArray(candidate) ? candidate : []);
+      let maxSeen = lastSeen;
       for (const m of items) {
+        const ts = Number((m as any).timestamp || (m as any).createdAt || 0);
+        const content = String((m as any).content ?? (m as any).summary ?? "");
+        const hash = `${ts}|${content.slice(0, 80)}`;
+        if (ts && ts <= lastSeen) continue;
+        if (!ts && sentHashes.has(hash)) continue;
+        if (ts) maxSeen = Math.max(maxSeen, ts);
+        sentHashes.add(hash);
         const withProv = attachProvenance(m, {
           source: 'gsk',
           sourceRecordId: (m as any).id || null,
@@ -251,8 +262,16 @@ app.get("/api/gsk/events", async (req, res) => {
           confidence: 0.9,
           transformSteps: ['zod-gsk-v1']
         });
-        res.write(`data: ${JSON.stringify({ type: "outreach", message: withProv.content, timestamp: withProv.timestamp, __provenance: withProv.__provenance })}\n\n`);
+        res.write(`data: ${JSON.stringify({
+          type: "outreach",
+          title: "GSK",
+          message: withProv.content,
+          timestamp: ts || Date.now(),
+          priority: "normal",
+          __provenance: withProv.__provenance
+        })}\n\n`);
       }
+      lastSeen = maxSeen;
     } catch (e) {
       // intentionally silent to keep SSE alive; could log
     }

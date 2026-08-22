@@ -19,7 +19,8 @@ import {
   MapPin,
   Heart,
    Star,
-   XCircle
+   XCircle,
+  Send
 } from "lucide-react";
 import { ProviderConfig } from "../types";
 
@@ -39,6 +40,12 @@ interface TelephoneTabProps {
   profile?: any;
 }
 
+interface ChatBubble {
+  role: "you" | "gsk";
+  text: string;
+  ts: number;
+}
+
 export const TelephoneTab: React.FC<TelephoneTabProps> = ({ accentColor, providerConfig, profile }) => {
   const [notifications, setNotifications] = useState<GSKNotification[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
@@ -47,6 +54,17 @@ export const TelephoneTab: React.FC<TelephoneTabProps> = ({ accentColor, provide
   const [lastCheck, setLastCheck] = useState<string>("Never");
   const [sseChannel, setSseChannel] = useState<EventSource | null>(null);
   const [showSettings, setShowSettings] = useState(false);
+  const [chatMessages, setChatMessages] = useState<ChatBubble[]>([]);
+  const [chatInput, setChatInput] = useState("");
+  const [sending, setSending] = useState(false);
+  const seenKeys = React.useRef<Set<string>>(new Set());
+  const threadRef = React.useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    if (threadRef.current) {
+      threadRef.current.scrollTop = threadRef.current.scrollHeight;
+    }
+  }, [chatMessages]);
 
   useEffect(() => {
     fetchGSKStatus();
@@ -63,43 +81,30 @@ export const TelephoneTab: React.FC<TelephoneTabProps> = ({ accentColor, provide
     };
     
     // Handle named events from the richer stream
-    evtSource.addEventListener('weave', (event) => {
-      try {
-        const data = JSON.parse(event.data);
-        const notification: GSKNotification = {
-          id: `evt-${Date.now()}-${Math.random().toString(36).slice(2,7)}`,
-          type: data.type || "outreach_message",
-          title: data.title || "Merchant",
-          message: data.content || data.text || data.message || JSON.stringify(data),
-          timestamp: data.timestamp || Date.now(),
-          priority: data.priority || "normal",
-          data,
-        };
-        setNotifications(prev => [notification, ...prev.slice(0, 49)]);
-        setUnreadCount(prev => prev + 1);
-      } catch (e) { console.error('[Telephone] Failed to parse weave event:', e); }
-    });
-    
     evtSource.addEventListener('connected', (event) => {
       console.log('[Telephone] GSK event stream handshake:', event.data);
     });
-    
+
     evtSource.onmessage = (event) => {
       try {
         const data: any = JSON.parse(event.data);
-        if (data.type && data.title) {
-          const notif: GSKNotification = {
-            id: data.id || Date.now().toString(),
-            type: data.type || "outreach_message",
-            title: data.title || "GSK Notification",
-            message: data.message || "",
-            timestamp: data.timestamp || Date.now(),
-            priority: data.priority || "normal",
-            data: data.data || {},
-          };
-          setNotifications(prev => [notif, ...prev].slice(0, 50));
-          setUnreadCount(prev => prev + 1);
-        }
+        if (!data || data.type === "connected" || data.type === "validation_warning") return;
+        if (data.type !== "outreach" && !(data.type && data.title)) return;
+        const message = data.message || data.content || "";
+        const key = `${data.timestamp}|${String(message).slice(0, 80)}`;
+        if (seenKeys.current.has(key)) return;
+        seenKeys.current.add(key);
+        const notif: GSKNotification = {
+          id: data.id || `evt-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+          type: data.type || "outreach_message",
+          title: data.title || "GSK",
+          message,
+          timestamp: data.timestamp || Date.now(),
+          priority: data.priority || "normal",
+          data: data.data || {},
+        };
+        setNotifications(prev => [notif, ...prev].slice(0, 50));
+        setUnreadCount(prev => prev + 1);
       } catch (e) {
         console.error('[Telephone] Failed to parse SSE message:', e);
       }
@@ -138,6 +143,30 @@ export const TelephoneTab: React.FC<TelephoneTabProps> = ({ accentColor, provide
   const clearAll = () => {
     setNotifications([]);
     setUnreadCount(0);
+    seenKeys.current.clear();
+  };
+
+  const sendChat = async () => {
+    const text = chatInput.trim();
+    if (!text || sending) return;
+    setChatInput("");
+    setSending(true);
+    const now = Date.now();
+    setChatMessages(prev => [...prev, { role: "you", text, ts: now }]);
+    try {
+      const res = await fetch("/api/gsk/chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ message: text }),
+      });
+      const data = await res.json();
+      const reply = data?.response || data?.content || (data?.success ? "(acknowledged)" : "(silence)");
+      setChatMessages(prev => [...prev, { role: "gsk", text: String(reply), ts: Date.now() }]);
+    } catch (e) {
+      setChatMessages(prev => [...prev, { role: "gsk", text: "(connection static...)", ts: Date.now() }]);
+    } finally {
+      setSending(false);
+    }
   };
 
   const priorityColor = (p: "low" | "normal" | "high" | "critical") => {
@@ -244,6 +273,50 @@ export const TelephoneTab: React.FC<TelephoneTabProps> = ({ accentColor, provide
             {notifications.map((notif) => renderNotification(notif))}
           </div>
         )}
+      </div>
+
+      {/* Direct Line — chat with GSK */}
+      <div className="p-4 bg-slate-950/50 border border-slate-800/60 rounded-2xl">
+        <h3 className="font-bold text-white mb-3 flex items-center gap-2">
+          <Phone className="w-5 h-5" style={{ color: accentColor }} />
+          Direct Line
+        </h3>
+        <div ref={threadRef} className="max-h-64 overflow-y-auto space-y-2 mb-3 pr-1">
+          {chatMessages.length === 0 ? (
+            <p className="text-xs text-slate-500 text-center py-4">Line open. Say something to GSK...</p>
+          ) : (
+            chatMessages.map((m, i) => (
+              <div key={i} className={`flex ${m.role === "you" ? "justify-end" : "justify-start"}`}>
+                <div className={`max-w-[80%] px-3 py-2 rounded-xl text-sm whitespace-pre-wrap ${
+                  m.role === "you"
+                    ? "bg-purple-500/20 border border-purple-500/30 text-purple-100 rounded-br-sm"
+                    : "bg-slate-900/80 border border-slate-700/60 text-slate-200 rounded-bl-sm"
+                }`}>
+                  <p>{m.text}</p>
+                  <p className="text-[10px] text-slate-500 mt-1 text-right">{new Date(m.ts).toLocaleTimeString()}</p>
+                </div>
+              </div>
+            ))
+          )}
+        </div>
+        <div className="flex items-center gap-2">
+          <input
+            value={chatInput}
+            onChange={(e) => setChatInput(e.target.value)}
+            onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) sendChat(); }}
+            disabled={sending}
+            placeholder={sending ? "GSK is thinking..." : "Say something to GSK..."}
+            className="flex-1 px-3 py-2 bg-slate-950 border border-slate-800 rounded-xl text-sm text-slate-200 placeholder-slate-600 focus:outline-none focus:border-pink-500/40 disabled:opacity-50"
+          />
+          <button
+            onClick={sendChat}
+            disabled={sending || !chatInput.trim()}
+            className="px-3 py-2 bg-slate-950 border border-purple-500/30 rounded-xl text-purple-400 hover:bg-purple-500/20 transition-colors disabled:opacity-40 disabled:hover:bg-slate-950"
+            title="Send to GSK"
+          >
+            <Send className="w-4 h-4" />
+          </button>
+        </div>
       </div>
 
       {/* Telephone Controls */}

@@ -440,12 +440,16 @@ class MCPServer {
                 }
 
                 if (this.memory && typeof this.memory.witness === 'function' && !response.startsWith('[soul]')) {
-                    await this.memory.witness({
-                        type: 'mcp_chat',
-                        weight: 0.6,
-                        tags: ['mcp', 'chat', 'external'],
-                        content: `MCP chat: ${message}\n\nGSK RESPONSE:\n${response}`,
-                    });
+                    // Fire-and-forget: chat must never block on memory writes (witness deadlock guard)
+                    Promise.race([
+                        this.memory.witness({
+                            type: 'mcp_chat',
+                            weight: 0.6,
+                            tags: ['mcp', 'chat', 'external'],
+                            content: `MCP chat: ${message}\n\nGSK RESPONSE:\n${response}`,
+                        }),
+                        new Promise(resolve => setTimeout(() => resolve({ witnessTimedOut: true }), 5000)),
+                    ]).catch(() => {});
                 }
             } else {
                 response = `[soul] Brain not available. You said: ${message.slice(0, 200)}`;
