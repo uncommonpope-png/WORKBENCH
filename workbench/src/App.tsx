@@ -153,6 +153,23 @@ export default function App() {
   const [equippedSkillIds, setEquippedSkillIds] = useState<string[]>(["web_search", "webhook_dispatcher"]);
   const computedActiveSkills = skills.filter((s) => equippedSkillIds.includes(s.id));
 
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      fetch("/api/gsk/context", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          activeTab,
+          equippedSkills: equippedSkillIds,
+          provider: providerConfig.provider,
+          model: providerConfig.model,
+          profileName: profile.name,
+        }),
+      }).catch(() => {});
+    }, 800);
+    return () => clearTimeout(timer);
+  }, [activeTab, equippedSkillIds, providerConfig.provider, providerConfig.model, profile.name]);
+
   // Handler functions
   const handleEquipSkill = (skillId: string) => {
     if (equippedSkillIds.includes(skillId)) return;

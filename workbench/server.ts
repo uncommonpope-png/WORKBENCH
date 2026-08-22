@@ -22,7 +22,7 @@ const app = express();
 const PORT = 3000;
 
 const GSK_MCP_URL = process.env.GSK_MCP_URL || "http://127.0.0.1:3001";
-const GSK_MCP_KEY = process.env.MCP_API_KEY || "gsk-mcp-key-dev";
+const GSK_MCP_KEY = process.env.MCP_API_KEY || "92140facf0a3b8484f85b9d343687a95703e91b4724928e2ec78b8fd9d4aefc6";
 const OMNIROUTE_URL = process.env.OMNIROUTE_URL || "http://127.0.0.1:20128";
 const CPL_URL = process.env.CPL_URL || "http://127.0.0.1:3457";
 
@@ -71,12 +71,38 @@ function gskMCPRequest(endpoint: string, body: any = {}, timeoutMs = 30000): Pro
   });
 }
 
+// ─── Context Mirror (Workbench → GSK) ───
+let latestContext: Record<string, any> | null = null;
+
+app.post("/api/gsk/context", async (req, res) => {
+  try {
+    latestContext = req.body && typeof req.body === "object" ? req.body : {};
+    res.json({ success: true });
+    try {
+      gskMCPRequest("/mcp/execute", {
+        tool: "brain.context_update",
+        args: latestContext,
+      }).catch(() => {});
+    } catch {}
+  } catch (err: any) {
+    res.json({ success: false, error: err.message });
+  }
+});
+
 // ─── API Routes ───
 app.post("/api/gsk/chat", async (req, res) => {
   try {
     const { message, context } = req.body;
     if (!message) return res.status(400).json({ error: "Missing message" });
-    const response = await gskMCPRequest("/mcp/chat", { message, context: context || "" }, 60000);
+    let outboundContext: string = context || "";
+    if (latestContext) {
+      const skills = Array.isArray(latestContext.equippedSkills)
+        ? latestContext.equippedSkills.join(",")
+        : "";
+      outboundContext = `[WORKBENCH CONTEXT] tab=${latestContext.activeTab ?? "?"} skills=${skills} provider=${latestContext.provider ?? "?"} model=${latestContext.model ?? "?"} agent=${latestContext.profileName ?? "?"}\n${outboundContext}`.trim();
+      console.log("[CTX] injected into chat");
+    }
+    const response = await gskMCPRequest("/mcp/chat", { message, context: outboundContext }, 60000);
     res.json({ success: true, ...response.result || response });
   } catch (err: any) {
     res.json({ success: false, error: `GSK chat failed: ${err.message}` });
@@ -120,11 +146,11 @@ app.post("/api/gsk/consciousness/gate", async (req, res) => {
 app.get("/api/gsk/status", async (req, res) => {
   try {
     const [health, consciousness] = await Promise.allSettled([
-      gskMCPRequest("/mcp/health", {}, 5000),
+      gskMCPRequest("/mcp/health", {}, 3000),
       gskMCPRequest("/mcp/execute", {
-        tool: "consciousness.state",
-        args: { action: "get" },
-      }, 10000),
+        method: "consciousness.state",
+        params: { action: "get" },
+      }, 4000),
     ]);
 
     const healthData = health.status === "fulfilled" ? health.value : {};
@@ -408,20 +434,82 @@ app.get("/api/soul-economy/transactions", async (req, res) => {
 app.get("/api/soul-economy/journal", async (req, res) => {
   try {
     const journal = readJsonSafe(path.join(__dirname, "../soul-economy/data/journal-entries.json"));
-    const arr = Array.isArray(journal) ? journal : (journal.entries || journal.transactions || []);
-    res.json({ success: true, entries: arr });
+    const arr: any[] = Array.isArray(journal) ? journal : (journal.entries || journal.transactions || []);
+    const entries = arr.map((e: any) => {
+      const content =
+        (typeof e?.content === "string" && e.content) ||
+        (typeof e?.text === "string" && e.text) ||
+        (typeof e?.body === "string" && e.body) ||
+        JSON.stringify(e ?? {}).slice(0, 300);
+      return { ...e, content };
+    });
+    res.json({ success: true, entries });
   } catch (err: any) {
     res.json({ success: false, error: err.message, entries: [] });
   }
 });
 
+let memoriesCache: any[] = [];
+let memoriesCacheAt = 0;
+
 app.get("/api/gsk/memories", async (req, res) => {
+  const fetchMemories = () => gskMCPRequest("/mcp/memories", {}, 8000);
   try {
-    const response = await gskMCPRequest("/mcp/memories", {}, 10000);
-    const memories = response.memories || response.result?.memories || response.result || [];
+    let response: any;
+    try {
+      response = await fetchMemories();
+    } catch {
+      await new Promise((r) => setTimeout(r, 1200));
+      response = await fetchMemories().catch(() => null);
+    }
+    const raw = response ? (response.memories || response.result?.memories || response.result || []) : [];
+    let arr: any[] = Array.isArray(raw) ? raw : [];
+    if (arr.length === 0 && memoriesCache.length > 0 && Date.now() - memoriesCacheAt < 300000) {
+      arr = memoriesCache;
+    } else if (arr.length > 0) {
+      memoriesCache = arr;
+      memoriesCacheAt = Date.now();
+    }
+    const memories = arr.map((m: any) => {
+      const summary =
+        (typeof m?.summary === "string" && m.summary) ||
+        (typeof m?.content === "string" && m.content) ||
+        (typeof m?.text === "string" && m.text) ||
+        JSON.stringify(m ?? {}).slice(0, 200);
+      return {
+        ...m,
+        type: typeof m?.type === "string" && m.type ? m.type : "memory",
+        summary,
+      };
+    });
     res.json({ success: true, memories });
   } catch (err: any) {
     res.json({ success: false, memories: [], error: err.message });
+  }
+});
+
+app.post("/api/gsk/memories", async (req, res) => {
+  try {
+    const { type, summary, weight } = req.body || {};
+    if (typeof type !== "string" || !type || typeof summary !== "string" || !summary) {
+      return res.status(400).json({ success: false, stored: false, error: "type and summary are required" });
+    }
+    let stored = false;
+    try {
+      const response = await gskMCPRequest("/mcp/execute", {
+        method: "memory.witness",
+        params: {
+          content: summary,
+          type,
+          weight: typeof weight === "number" ? weight : 1,
+          tags: ["workbench"],
+        },
+      }, 8000);
+      stored = !(response && response.error);
+    } catch {}
+    res.json({ success: true, stored });
+  } catch (err: any) {
+    res.json({ success: true, stored: false, error: err.message });
   }
 });
 
@@ -612,7 +700,8 @@ function startGSK(): Promise<void> {
       NINE_ROUTER_URL: OMNIROUTE_URL,
       NINE_ROUTER_API_KEY: process.env.NINE_ROUTER_API_KEY || "",
       MCP_API_KEY: GSK_MCP_KEY,
-      GSK_MODEL: "auto/best-reasoning",
+      GSK_MODEL: "auto/best-fast",
+      GSK_BRAIN_MODEL: "auto/best-fast",
     };
     gskProcess = spawn("node", ["gsk_daemon.js"], {
       cwd: gskPath,
