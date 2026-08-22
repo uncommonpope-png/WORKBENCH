@@ -47,6 +47,25 @@ export const GskMindTab: React.FC<GskMindTabProps> = ({ accentColor }) => {
   const [fileName, setFileName] = useState("");
   const [skillName, setSkillName] = useState("");
   const [skillCode, setSkillCode] = useState("");
+  const [recallQuery, setRecallQuery] = useState("");
+  const [recallResults, setRecallResults] = useState<any[]>([]);
+
+  const recall = async () => {
+    const q = recallQuery.trim();
+    if (!q) return;
+    setStatus(`Searching his long-term memory for "${q}"...`);
+    try {
+      const r = await fetch(`/api/gsk/recall?q=${encodeURIComponent(q)}`).then((x) => x.json());
+      if (r.success) {
+        setRecallResults(r.results || []);
+        setStatus(`Found ${r.results.length} memories.`);
+      } else {
+        setStatus(`Recall failed: ${r.error}`);
+      }
+    } catch (e: any) {
+      setStatus(`Recall error: ${e.message}`);
+    }
+  };
 
   useEffect(() => {
     refresh();
@@ -167,6 +186,38 @@ export const GskMindTab: React.FC<GskMindTabProps> = ({ accentColor }) => {
                 <div className="flex justify-between items-start gap-2">
                   <p className="text-xs text-slate-300 whitespace-pre-wrap line-clamp-3">{t.summary}</p>
                   <span className="text-[10px] text-slate-500 shrink-0">{new Date(t.timestamp).toLocaleTimeString()}</span>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* LONG-TERM RECALL */}
+      <div className="p-4 bg-slate-950/50 border border-slate-800/60 rounded-2xl">
+        <h3 className="font-bold text-white mb-3 flex items-center gap-2">
+          <Brain className="w-5 h-5" style={{ color: accentColor }} />
+          Long-Term Recall
+        </h3>
+        <div className="flex items-center gap-2 mb-3">
+          <input
+            value={recallQuery}
+            onChange={(e) => setRecallQuery(e.target.value)}
+            onKeyDown={(e) => { if (e.key === "Enter") recall(); }}
+            placeholder="Search everything he has ever learned..."
+            className="flex-1 px-3 py-2 bg-slate-900 border border-slate-800 rounded-xl text-sm text-slate-200 placeholder-slate-600 focus:outline-none focus:border-purple-500/40"
+          />
+          <button onClick={recall} className="px-4 py-2 bg-slate-900 border border-purple-500/30 rounded-xl text-xs font-bold text-purple-300 hover:bg-purple-500/20 transition-colors">
+            Search
+          </button>
+        </div>
+        {recallResults.length > 0 && (
+          <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
+            {recallResults.map((m, i) => (
+              <div key={i} className="p-3 bg-slate-900/70 border-l-2 border-cyan-500/40 rounded-r-lg">
+                <div className="flex justify-between items-start gap-2">
+                  <p className="text-xs text-slate-300 whitespace-pre-wrap line-clamp-3">{String(m.content ?? m.summary ?? "").slice(0, 300)}</p>
+                  <span className="text-[10px] text-purple-400 shrink-0 uppercase">{m.type}</span>
                 </div>
               </div>
             ))}

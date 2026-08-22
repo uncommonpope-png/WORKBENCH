@@ -99,37 +99,32 @@ export default function App() {
         console.error("Failed to parse transactions", e);
       }
     }
-    return [
-      {
-        id: "TX-1049",
-        type: "mining",
-        title: "Validated local GPU compute task verification loop",
-        amount: 500,
-        timestamp: "2026-05-21 12:01"
-      },
-      {
-        id: "TX-1048",
-        type: "purchase",
-        title: "Purchased advanced Quantum Realism Evaluator skill",
-        amount: -650,
-        timestamp: "2026-05-21 11:42"
-      },
-      {
-        id: "TX-1047",
-        type: "sale",
-        title: "P2P Sold custom Core Audit ledger parameters",
-        amount: 320,
-        timestamp: "2026-05-21 08:31"
-      },
-      {
-        id: "TX-1046",
-        type: "purchase",
-        title: "Acquired DeFi Solana Memetics Miner template structure",
-        amount: -450,
-        timestamp: "2026-05-21 04:15"
-      }
-    ];
+    return [];
   });
+
+  // Hydrate transactions from the REAL soul ledger (GSK's ledger.jsonl)
+  useEffect(() => {
+    fetch("/api/soul-ledger?limit=30")
+      .then((r) => r.json())
+      .then((data) => {
+        if (!data?.success || !Array.isArray(data.entries)) return;
+        const real: MarketplaceTransaction[] = data.entries
+          .filter((e: any) => e && (e.id || e.timestamp))
+          .map((e: any, i: number) => ({
+            id: `TX-${String(e.id ?? 9000 - i)}`,
+            type: e.type === "knowledge" ? "purchase" : e.type === "mcp_chat" ? "sale" : "mining",
+            title: String(e.content ?? e.raw ?? "ledger event").slice(0, 90),
+            amount: Math.round(Number(e.weight ?? 0.5) * 100),
+            timestamp: e.timestamp ? String(e.timestamp).slice(0, 16).replace("T", " ") : "",
+          }));
+        setTransactions((prev) => {
+          const merged = [...real];
+          for (const p of prev) if (!merged.some((m) => m.id === p.id)) merged.push(p);
+          return merged.slice(0, 60);
+        });
+      })
+      .catch(() => {});
+  }, []);
 
   useEffect(() => {
     localStorage.setItem("agent_workbench_qsc_balance", qscBalance.toString());

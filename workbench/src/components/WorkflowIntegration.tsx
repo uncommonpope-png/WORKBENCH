@@ -27,6 +27,7 @@ export const WorkflowIntegration: React.FC<WorkflowIntegrationProps> = ({
   const [nodeCode, setNodeCode] = useState<string>("");
   const [pythonCode, setPythonCode] = useState<string>("");
   const [jsonPayload, setJsonPayload] = useState<string>("");
+  const [compileError, setCompileError] = useState<string | null>(null);
 
   // Compile on change
   useEffect(() => {
