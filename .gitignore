@@ -22,9 +22,33 @@ UNMET-NEEDS-2026.md
 AI-CREATOR-PAIN-POINTS.md
 market-report.json
 profit-memory.json
-market-report.json
 test-agent-rollbackai.cjs
 rollbackai.cjs
 research-rollbackai.cjs
-post-mastodon.js
 profit-prime.cjs
+profit-brain/config.json
+profit-brain/state/live-state.json
+profit-brain/journal-entries/live-journal.json
+
+# Seshat ALLM - Large files and model data
+.transformers-cache/
+*.gguf
+*.ggml
+.seshat-vectors/
+
+# Keep vector structure, not actual data
+!.seshat-vectors/.gitkeep
+
+# Model outputs
+model_results.txt
+
+# Transient directories
+C/
+WORKBENCH_FRESH/
+WORKBENCH_GITHUB/
+WORKBENCH_LATEST/
+WORKSPACE/
+final-run/
+sovereign-kernel/
+the-architect/
+buyasoul-workbench/
