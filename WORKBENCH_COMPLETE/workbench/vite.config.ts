@@ -14,14 +14,9 @@ export default defineConfig(() => {
       alias: {
         '@': path.resolve(__dirname, '.'),
       },
-      // Single React instance across the whole graph — prevents
-      // "Invalid hook call / more than one copy of React" white screens.
       dedupe: ['react', 'react-dom'],
     },
     optimizeDeps: {
-      // Eagerly bundle ALL runtime deps in ONE pass at server start.
-      // Lazy discovery (e.g. zod found mid-session) splits the graph into
-      // two optimizer generations and duplicates React.
       include: [
         'react',
         'react-dom/client',
@@ -31,9 +26,6 @@ export default defineConfig(() => {
         'react-markdown',
         'three',
         'zod',
-        // FORGE IDE (Tab 14): heavy deps MUST be pre-bundled at server start.
-        // Lazy mid-session discovery triggers optimizer reload loops that
-        // leave the IDE module graph hanging on a blank pane.
         'dockview',
         '@monaco-editor/react',
         '@xterm/xterm',
@@ -42,19 +34,11 @@ export default defineConfig(() => {
         'web-tree-sitter',
       ],
     },
-    server: {
-      // Force clients to never cache modules — defeats stale-bundle loops
-      // where a browser keeps serving an old build after server restarts.
-      headers: {
-        'Cache-Control': 'no-cache, no-store, must-revalidate, max-age=0',
-        'Pragma': 'no-cache',
-        'Expires': '0',
-      },
-      // HMR is disabled in AI Studio via DISABLE_HMR env var.
-      // Do not modifyâfile watching is disabled to prevent flickering during agent edits.
-      hmr: process.env.DISABLE_HMR !== 'true',
-      // Disable file watching when DISABLE_HMR is true to save CPU during agent edits.
-      watch: process.env.DISABLE_HMR === 'true' ? null : {},
+    build: {
+      outDir: 'dist',
+      emptyOutDir: true,
+      sourcemap: true,
     },
+    base: './',
   };
 });
