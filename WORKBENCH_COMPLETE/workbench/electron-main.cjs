@@ -140,6 +140,40 @@ app.on('window-all-closed', () => {
   }
 });
 
+// IPC Handlers for Seshat
+ipcMain.handle('seshat-search', async (event, { query, topK = 10 }) => {
+  try {
+    const { hybridSearch } = require('./profit-brain/body/seshat/core/index.js');
+    const results = await hybridSearch(query, topK);
+    return { results };
+  } catch (err) {
+    console.error('[SESHAT] Search error:', err.message);
+    return { results: [], error: err.message };
+  }
+});
+
+ipcMain.handle('seshat-reason', async (event, { prompt, context }) => {
+  try {
+    const { think } = require('./profit-brain/body/seshat/core/index.js');
+    const result = await think(prompt, context);
+    return { response: result, text: result };
+  } catch (err) {
+    console.error('[SESHAT] Reason error:', err.message);
+    return { response: 'Error: ' + err.message, error: err.message };
+  }
+});
+
+ipcMain.handle('seshat-synthesize', async (event, { topic, sources }) => {
+  try {
+    const { synthesize } = require('./profit-brain/body/seshat/core/index.js');
+    const result = await synthesize(topic, sources);
+    return { synthesized: result, result: result };
+  } catch (err) {
+    console.error('[SESHAT] Synthesize error:', err.message);
+    return { synthesized: 'Error: ' + err.message, error: err.message };
+  }
+});
+
 // Initialize ALL family systems in-process
 async function initializeFamily() {
   try {

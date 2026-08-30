@@ -9,4 +9,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
     return () => ipcRenderer.removeListener(channel, callback);
   },
   platform: process.platform,
+  seshat: {
+    search: (query, topK) => ipcRenderer.invoke('seshat-search', { query, topK }),
+    reason: (prompt, context) => ipcRenderer.invoke('seshat-reason', { prompt, context }),
+    synthesize: (topic, sources) => ipcRenderer.invoke('seshat-synthesize', { topic, sources }),
+  }
 });

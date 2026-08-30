@@ -30,6 +30,7 @@ import { InternetTab } from "./components/InternetTab";
 import { ArtifactForgeTab } from "./components/ArtifactForgeTab";
 import { SoulChainLedgerTab } from "./components/SoulChainLedgerTab";
 import { SoulGunArmoryTab } from "./components/SoulGunArmoryTab";
+import { SeshatTab } from "./components/SeshatTab";
 import { SubAgentSwarmTab } from "./components/SubAgentSwarmTab";
 import { WindsurfCascadeTab } from "./components/WindsurfCascadeTab";
 import { BeingTab } from "./components/BeingTab";
@@ -102,9 +103,9 @@ export default function App() {
   });
 
   const [skills, setSkills] = useState<Skill[]>(INITIAL_SKILLS);
-  const [activeTab, setActiveTab] = useState<"gsk" | "capabilities" | "profile" | "skills" | "simulation" | "integrations" | "realism" | "vault" | "habitat" | "marketplace" | "transactions" | "profitPrime" | "roles" | "journal" | "combos" | "omniroute" | "telephone" | "mind" | "power" | "ide" | "stream" | "internet" | "senate" | "artifactForge" | "soulChain" | "soulGun" | "subSwarm" | "cascade" | "being" | "goalsAutonomy">(() => {
+  const [activeTab, setActiveTab] = useState<"gsk" | "capabilities" | "profile" | "skills" | "simulation" | "integrations" | "realism" | "vault" | "habitat" | "marketplace" | "transactions" | "profitPrime" | "roles" | "journal" | "combos" | "omniroute" | "telephone" | "mind" | "power" | "ide" | "stream" | "internet" | "senate" | "artifactForge" | "soulChain" | "soulGun" | "subSwarm" | "cascade" | "being" | "goalsAutonomy" | "seshat">(() => {
     const h = window.location.hash.replace("#", "");
-    const valid = ["gsk", "capabilities", "profile", "skills", "simulation", "integrations", "realism", "vault", "habitat", "marketplace", "transactions", "profitPrime", "roles", "journal", "combos", "omniroute", "telephone", "mind", "power", "ide", "stream", "internet", "senate", "artifactForge", "soulChain", "soulGun", "subSwarm", "cascade", "being", "goalsAutonomy"];
+    const valid = ["gsk", "capabilities", "profile", "skills", "simulation", "integrations", "realism", "vault", "habitat", "marketplace", "transactions", "profitPrime", "roles", "journal", "combos", "omniroute", "telephone", "mind", "power", "ide", "stream", "internet", "senate", "artifactForge", "soulChain", "soulGun", "subSwarm", "cascade", "being", "goalsAutonomy", "seshat"];
     return (valid as string[]).includes(h) ? (h as any) : "gsk";
   });
 
@@ -496,13 +497,21 @@ export default function App() {
 </div>
 </>
         );
-      case "goalsAutonomy":
+case "goalsAutonomy":
         return (
 <>
 <div className="flex-1 flex flex-col min-h-0">
   <GoalsAutonomyTab accentColor={profile.avatarColor} />
 </div>
-</>
+ </>
+        );
+      case "seshat":
+        return (
+<>
+<div className="flex-1 flex flex-col min-h-0">
+  <SeshatTab accentColor={profile.avatarColor} />
+</div>
+ </>
         );
       default:
         return null;
@@ -1032,6 +1041,24 @@ export default function App() {
           >
             <ScrollText className="w-4 h-4" style={{ color: profile.avatarColor }} />
             Journal
+          </button>
+
+          <button
+            onClick={() => (winOpen("seshat") ? focusWin("seshat") : setActiveTab("seshat"))}
+            draggable={true}
+            onDragStart={(e) => { e.dataTransfer.setData("text/pop-tab", "seshat"); }}
+            className={`flex items-center gap-2 px-4 py-2 border rounded-xl text-xs font-mono tracking-wider uppercase transition-all duration-300 whitespace-nowrap cursor-pointer hover:scale-[1.03] active:scale-95 ${
+              activeTab === "seshat"
+                ? "bg-slate-950 text-white font-bold border-slate-650"
+                : "border-transparent text-slate-400 hover:text-slate-200 hover:bg-slate-800/30"
+            }`}
+            style={{
+              borderColor: activeTab === "seshat" ? profile.avatarColor : undefined,
+              boxShadow: activeTab === "seshat" ? `0 0 16px ${profile.avatarColor}25, inset 0 0 8px ${profile.avatarColor}10` : undefined,
+            }}
+          >
+            <Brain className="w-4 h-4" style={{ color: profile.avatarColor }} />
+            Seshat
           </button>
 
           <button
