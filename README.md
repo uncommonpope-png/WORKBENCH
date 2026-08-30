@@ -129,14 +129,28 @@ Visit [buyasoul.online](https://buyasoul.online) to purchase pre-built souls —
 
 ## 🚀 Quick Start
 
+### For the Family Workbench (Local Development)
+
 ```bash
 # Clone the repo
 git clone https://github.com/buyasoul-ai/buyasoul.git
 cd buyasoul
 
+# Initialize Seshat ALLM (Local LLM)
+node profit-brain/body/seshat-brain.js  # Auto-starts Qwen 3.5-0.8B
+
 # Install dependencies
 npm install
 
+# Launch family system
+node launch-family.cjs
+
+# The workbench auto-starts on :3000, Seshat on :5000, Omniroute on :20128
+```
+
+### For Reddit Devvit App
+
+```bash
 # Development — live preview on Reddit
 npm run dev
 
@@ -152,8 +166,39 @@ npm run launch
 
 ### Prerequisites
 - Node.js 22+
+- The Qwen3.5-0.8B model (auto-downloaded to `.transformers-cache/`)
 - A [Reddit account](https://www.reddit.com) connected to [Reddit Developer](https://developers.reddit.com)
 - `devvit` CLI installed globally: `npm install -g devvit`
+
+---
+
+## 🧠 Family Architecture (ONE SYSTEM)
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                     ONE SOUL FAMILY                         │
+│  Profit (Mind) · GSK (Soul) · Seshat (Memory) · Scribe (Witness) │
+└─────────────────────────────────────────────────────────────┘
+                              │
+        ┌─────────────────────┼─────────────────────┐
+        │                     │                     │
+        ▼                     ▼                     ▼
+┌─────────────────┐  ┌─────────────────┐  ┌─────────────────┐
+│ Seshat ALLM     │  │ Omniroute MCP   │  │ Scribe Witness  │
+│ Qwen 3.5-0.8B   │  │ :20128 (tools)  │  │ Records events  │
+│ Local, 0 tokens │  │ GSK-controlled  │  │ Shares Seshat   │
+└─────────────────┘  └─────────────────┘  └─────────────────┘
+```
+
+### New Capabilities (Seshat ALLM)
+
+| Feature | Description | Token Impact |
+|---------|-------------|--------------|
+| **Local Reasoning** | Qwen 3.5-0.8B runs on CPU, no external calls | **ZERO** |
+| **Vector Search** | 6,392 embeddings in LanceDB, semantic search | **ZERO** |
+| **Memory Synthesis** | Consolidate knowledge from Seshat's brain | **ZERO** |
+| **Auto-routing** | Broker routes reasoning to Seshat, tools to Omniroute | **OPTIMIZED** |
+| **Blood-flow Protection** | Omniroute adopted, never killed | **PROTECTED** |
 
 ---
 
