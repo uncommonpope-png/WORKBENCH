@@ -7,11 +7,58 @@
     "dev": "tsx server.ts",
     "build": "vite build && esbuild server.ts --bundle --platform=node --format=cjs --packages=external --sourcemap --outfile=dist/server.cjs",
     "start": "node setup.js && node dist/server.cjs",
+    "electron:dev": "concurrently \"npm run dev\" \"wait-on http://localhost:3000 && electron electron-main.cjs\"",
+    "electron:build": "npm run build && electron-builder",
     "setup": "node setup.js",
     "postinstall": "node setup.js",
     "preview": "vite preview",
     "clean": "rm -rf dist server.js",
     "lint": "tsc --noEmit"
+  },
+  "main": "electron-main.cjs",
+  "build": {
+    "appId": "com.buyasoul.workbench",
+    "productName": "BUYASOUL Workbench",
+    "files": [
+      "dist/**/*",
+      "electron-main.cjs",
+      "public/**/*",
+      ".transformers-cache/**/*",
+      ".seshat-vectors/**/*",
+      "profit-brain/**/*"
+    ],
+    "extraResources": [
+      {
+        "from": ".transformers-cache",
+        "to": ".transformers-cache",
+        "filter": [
+          "**/*"
+        ]
+      },
+      {
+        "from": ".seshat-vectors",
+        "to": ".seshat-vectors",
+        "filter": [
+          "**/*"
+        ]
+      },
+      {
+        "from": "profit-brain",
+        "to": "profit-brain",
+        "filter": [
+          "**/*"
+        ]
+      }
+    ],
+    "win": {
+      "target": "nsis",
+      "icon": "public/icon.png"
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true
+    }
   },
   "dependencies": {
     "@google/genai": "^1.29.0",
@@ -49,11 +96,15 @@
     "@types/ws": "^8.5.12",
     "@types/xterm": "^3.0.0",
     "autoprefixer": "^10.4.21",
+    "concurrently": "^10.0.5",
+    "electron": "^44.0.0",
+    "electron-builder": "^26.15.3",
     "esbuild": "^0.25.0",
     "monaco-editor": "^0.56.0",
     "tailwindcss": "^4.1.14",
     "tsx": "^4.21.0",
     "typescript": "~5.8.2",
-    "vite": "^6.2.3"
+    "vite": "^6.2.3",
+    "wait-on": "^9.1.0"
   }
 }
