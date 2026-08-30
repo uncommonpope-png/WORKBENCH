@@ -1,0 +1,48 @@
+---
+- name: Deploy GSK Telemetry Nodes
+  hosts: telemetry_nodes
+  gather_facts: yes
+  vars:
+    gsk_telemetry_port: 3001
+    gsk_telemetry_service_name: gsk-telemetry-node
+    gsk_telemetry_repo: "https://github.com/gsk/gsk-telemetry-node.git"
+  tasks:
+    - name: Install system dependencies
+      package:
+        name:
+          - nodejs
+          - npm
+          - git
+        state: present
+
+    - name: Create telemetry service directory
+      file:
+        path: /opt/gsk/telemetry
+        state: directory
+        mode: '0755'
+
+    - name: Deploy GSK Telemetry Node Systemd Service
+      copy:
+        dest: /etc/systemd/system/{{ gsk_telemetry_service_name }}.service
+        content: |
+          [Unit]
+          Description=GSK Infrastructure Telemetry Node Service
+          After=network.target
+
+          [Service]
+          Type=simple
+          User=root
+          WorkingDirectory=/opt/gsk/telemetry
+          ExecStart=/usr/bin/node /opt/gsk/telemetry/index.js
+          Restart=always
+          Environment=PORT={{ gsk_telemetry_port }}
+
+          [Install]
+          WantedBy=multi-user.target
+        mode: '0644'
+
+    - name: Enable and start GSK Telemetry Node Service
+      systemd:
+        name: "{{ gsk_telemetry_service_name }}"
+        state: started
+        enabled: yes
