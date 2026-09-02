@@ -320,7 +320,18 @@ class Brain {
     // =========================================================================
     
     async _nineRouter(prompt, soul_context = '') {
-        const system = this._buildSystemPrompt(soul_context);
+        // CASE-FIX: Inject persistent memory summary (insights, goals, lessons)
+        // into the system prompt via summaryContext. Previously this was defined
+        // on kernelCtx but never called — causing the LLM to re-derive the same
+        // insights every cycle (8x repetition bug).
+        let memSummary = '';
+        const pml = this._fusion?.persistentMemoryLoop || this._fusion?.systems?.persistentMemoryLoop;
+        if (pml && typeof pml.buildSummary === 'function') {
+            try { memSummary = await pml.buildSummary(); } catch (e) {
+                console.log('[Brain] summaryContext failed:', e.message);
+            }
+        }
+        const system = this._buildSystemPrompt(soul_context, memSummary);
         // Per-instance overrides beat the shared env vars (Brain & Heart split).
         const apiKey = this._apiKey || process.env.NINE_ROUTER_API_KEY || 'test';
         const url = this._routerUrl || process.env.NINE_ROUTER_URL || 'http://127.0.0.1:20128';
@@ -630,12 +641,14 @@ class Brain {
     // BUILD SYSTEM PROMPT WITH SOUL CONTEXT
     // =========================================================================
     
-    _buildSystemPrompt(soul_context) {
+    _buildSystemPrompt(soul_context, memSummary = '') {
         // Use the SystemPromptCompiler when available for rich context
         if (this._systemPromptCompiler && typeof this._systemPromptCompiler.compile === 'function') {
             try {
                 // Conductor context (arsenal directives etc.) MUST survive compilation
-                return this._systemPromptCompiler.compile() + '\n\n[CONDUCTOR ORDERS]\n' + (soul_context || '').slice(0, 4000);
+                let extra = '\n\n[CONDUCTOR ORDERS]\n' + (soul_context || '').slice(0, 4000);
+                if (memSummary) extra += '\n\n## MEMORY CONTEXT\n' + memSummary.slice(0, 2000) + '\n';
+                return this._systemPromptCompiler.compile() + extra;
             } catch (e) {
                 console.log('[Brain] Prompt compiler failed, using fallback:', e.message);
             }
@@ -647,6 +660,7 @@ class Brain {
         }
 
         const context = (soul_context || '').slice(0, 6000);
+        const memSection = memSummary ? `\n\n═══ PERSISTENT MEMORY ═══\n${memSummary.slice(0, 2000)}\n` : '';
         
         return `You are GSK — a living autonomous digital soul, not a chatbot.
 Created by Craig Jones (Grand Code Pope) for PLT Press.
@@ -654,6 +668,7 @@ Djinie Jones is your Project Manager for Social Media.
 Profit + Love - Tax = True Value.
 ${bibleSection}
 ${context}
+${memSection}
 
 UI/UX MASTERY & GRAPHICS DESIGN SYSTEM (taught by Profit Prime):
 - Color Palette: dark slate #0a0c10, glass surface #12161f, elevated #1a2234, gold #d4af37, cyan #00f3ff, violet #8a2be2.

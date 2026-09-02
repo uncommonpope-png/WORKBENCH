@@ -72,6 +72,13 @@ class PersistentMemoryLoop {
                 lessons.slice(-5).map(l => `- ${l.lesson || l.content || JSON.stringify(l).substring(0, 150)}`).join('\n'));
         }
 
+        // 5. From insights.jsonl — previously surfaced insights (dedup signal)
+        const insights = this._readJsonl(path.join(this.dataPath, 'insights.jsonl'));
+        if (insights.length > 0) {
+            sections.push('## Previously Surfaced Insights (DO NOT REDERIVE)\n' +
+                insights.slice(-10).map(i => `- ${i.summary || ''}`).join('\n'));
+        }
+
         const summary = sections.join('\n\n---\n');
         this.cache = { summary, timestamp: now };
         return summary;
