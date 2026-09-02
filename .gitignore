@@ -1,4 +1,5 @@
 node_modules
+**/node_modules
 .yarn
 logs
 *.log
@@ -52,3 +53,19 @@ final-run/
 sovereign-kernel/
 the-architect/
 buyasoul-workbench/
+
+# Embedded git repos (not submodules)
+NEWLORDYLORD-study/
+Sentient-PLUS-GSK/
+deepseek-harness/
+
+# Don't push to HF — too large / redundant
+omniroute/node_modules/
+omniroute/.next/
+omnibridge/node_modules/
+**/downloads/*.zip
+**/downloads/*.exe
+pyramid/downloads/
+*.sqlite
+*.db
+*.sqlite3
