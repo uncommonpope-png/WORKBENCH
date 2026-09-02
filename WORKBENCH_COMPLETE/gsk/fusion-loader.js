@@ -974,19 +974,19 @@ class GSKFusion {
 
             // Register existing stats with the telemetry engine
             this._safeInit('telemetryRegistrations', () => {
-                this.telemetryEngine.registerStats('SelfGrowingBrain', this.selfGrowingBrain.stats);
-                this.telemetryEngine.registerStats('PerpetualConsciousness', this.perpetualConsciousness.stats);
-                this.telemetryEngine.registerStats('DualProcessEngine', this.dualProcessEngine.stats);
-                this.telemetryEngine.registerStats('LivingMemory', this.livingMemory.stats);
-                this.telemetryEngine.registerStats('MindsEye', this.consciousness.mindsEye?.stats || {});
+                if (this.selfGrowingBrain) this.telemetryEngine.registerStats('SelfGrowingBrain', this.selfGrowingBrain.stats);
+                if (this.perpetualConsciousness) this.telemetryEngine.registerStats('PerpetualConsciousness', this.perpetualConsciousness.stats);
+                if (this.dualProcessEngine) this.telemetryEngine.registerStats('DualProcessEngine', this.dualProcessEngine.stats);
+                if (this.livingMemory) this.telemetryEngine.registerStats('LivingMemory', this.livingMemory.stats);
+                if (this.consciousness?.mindsEye) this.telemetryEngine.registerStats('MindsEye', this.consciousness.mindsEye.stats || {});
                 // SanctumClient retired — SCRIBE is witness
-                this.telemetryEngine.registerStats('ScribeBridge', this.scribeBridge.stats);
-                this.telemetryEngine.registerStats('ConstantChat', this.constantChat.stats);
-                this.telemetryEngine.registerStats('PlaygroundEngine', this.playground.stats);
-                this.telemetryEngine.registerStats('AutonomousAgentSpawner', this.agents.spawner?.stats || {});
+                if (this.scribeBridge) this.telemetryEngine.registerStats('ScribeBridge', this.scribeBridge.stats);
+                if (this.constantChat) this.telemetryEngine.registerStats('ConstantChat', this.constantChat.stats);
+                if (this.playground) this.telemetryEngine.registerStats('PlaygroundEngine', this.playground.stats);
+                if (this.agents?.spawner) this.telemetryEngine.registerStats('AutonomousAgentSpawner', this.agents.spawner.stats || {});
             });
 
-            this.perpetualConsciousness.start();
+            if (this.perpetualConsciousness) this.perpetualConsciousness.start();
             console.log(`  [FUSION] ✓ Perpetual consciousness started (${this.perpetualConsciousness.thoughtFrequency}ms controlled cycle)`);
 
             // ── CRON SCHEDULER (from SCRIBE) ──────────────────────

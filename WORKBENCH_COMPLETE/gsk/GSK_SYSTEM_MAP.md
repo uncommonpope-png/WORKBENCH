@@ -286,25 +286,36 @@ same insight → same goal → 8 consecutive repetitions.
 | `[FUSION] ✓ State backup active` | fusion-loader:1889 | StateBackup.start() called | ✅ TRUE |
 | `[FUSION] ✓ Thought stream active` | fusion-loader:1896 | ThoughtStream.start() called | ✅ TRUE |
 
-### Key Contradictions
+### Key Contradictions (CORRECTED)
 
-1. **InsightEngine never starts.** Line 925 creates it, but there is NO `this.insightEngine.start()`
-   call anywhere in the boot sequence. The engine is alive but asleep — it never
-   runs `cycle()`, never detects patterns, never writes to `insights.jsonl`.
-   The insights in `data/insights.jsonl` (1,900 entries) were written by an
-   EARLIER version or by a different code path.
+1. **InsightEngine IS started** — Line 1238 calls `this.insightEngine.start()`. My earlier
+   analysis was incorrect. The engine runs on a 15-minute cycle (line 1211). However,
+   its dedup cache (`insightHistory` in memory) resets on every crash — so cross-crash
+   dedup doesn't survive.
 
-2. **summaryContext is defined but never called.** Line 319 of fusion-loader
-   defines `kernelCtx.summaryContext`, passes `kernelCtx` to ConsciousnessResearcher,
-   SelfGrowingBrain, and others. But MegaBrain._buildSystemPrompt (the central
-   think() entry point) **never calls summaryContext**. The RAG context that
-   should include prior insights is simply absent from every LLM prompt.
+2. **summaryContext is defined but never called by MegaBrain.** Line 319 of fusion-loader
+   defines `kernelCtx.summaryContext`, and `PersistentMemoryLoop` is constructed (L1434),
+   but `MegaBrain._buildSystemPrompt()` **never called `summaryContext()` or
+   `persistentMemoryLoop.buildSummary()`**. The RAG context that should include prior
+   insights was completely absent from every LLM prompt.
+   **FIX APPLIED:** `_nineRouter` now pre-computes `buildSummary()` and passes it to
+   `_buildSystemPrompt(soul_context, memSummary)`.
 
-3. **GoalEngine.propose has no exit condition.** When the LLM proposes a goal
-   that maps to a canonical key already in `this.goals`, it returns the existing
-   goal object (line 88-91) instead of returning `null`. The caller
-   (BeautifulLoop._decide, L366-373) treats this as "goal proposed" and
-   executes it again. No mechanism checks whether the goal was already
+3. **insights.jsonl is write-only** — `PersistentMemoryLoop.buildSummary()` read from
+   `goals.json`, `knowledge.jsonl`, `journal.json`, `compiled_lessons.jsonl` but
+   **explicitly excluded `insights.jsonl`**. So even though insights were persisted,
+   the LLM proposing goals had no memory of them.
+   **FIX APPLIED:** Added insights.jsonl readback to `buildSummary()` as a
+   "Previously Surfaced Insights (DO NOT REDERIVE)" section.
+
+4. **GoalEngine.propose returns duplicate goals.** When canonical key matches, it returns
+   the old goal object (line 88-91) instead of `null`. `BeautifulLoop._decide` treats this
+   as "new goal proposed" and executes it again. **PENDING FIX.**
+
+5. **Telemetry registration crashes on null stats.** Line 977-986 accesses `.stats` on
+   subsystems without null guards. If any `_safeInit` failed, the access throws.
+   Line 989 `this.perpetualConsciousness.start()` has no null guard.
+   **FIX APPLIED:** Each stats access now guarded with `if (this.xxx)`.
    COMPLETED.
 
 ---
@@ -332,43 +343,53 @@ PerpetualConsciousness._generateThought() [L295-310]
     → 8 consecutive executions of identical task
 ```
 
-### Why the Spiral Filter Doesn't Help
+### Why the Spiral Filter Doesn't Prevent Repetition
 
 The `InsightEngine._detectPatterns()` SPIRAL_WORDS filter (line 94-99) only
-applies when `InsightEngine.cycle()` runs. But `InsightEngine.start()` is
-**never called from boot** — confirmed by grep: no `.start()` invocation on
-`insightEngine` anywhere in `fusion-loader.js`.
+applies when `InsightEngine.cycle()` runs. InsightEngine IS started (line 1238),
+but its dedup cache (`insightHistory` Map) is **in-memory only** — it resets on
+every crash/reboot. So after a crash, the same insight is re-derived.
+
+The real failure chain is different from what I initially hypothesized:
+
+```
+PerpetualConsciousness._generateThought() → brain.think()
+  → LLM generates: "I notice GSK's telemetry ingestion lacks persistence..."
+  → This goes to MegaBrain._nineRouter → _buildSystemPrompt
+  → _buildSystemPrompt NEVER called persistentMemoryLoop.buildSummary()
+  → LLM has ZERO memory of previously surfaced insights
+  → Same insight → same goal → 8 consecutive executions
+
+ConsciousnessResearcher.research() also calls brain.think() with the same
+question → same result, because buildSummary() (which would show
+"Previously Surfaced Insights DO NOT REDERIVE") was never injected.
+
+FIX: _nineRouter now calls buildSummary() and passes result to _buildSystemPrompt.
+The LLM now sees prior insights in context → won't re-derive the same one.
+```
 
 ---
 
-## RECOMMENDED FIXES (Priority)
+## FIXES APPLIED ✅
 
 ### P0 — Stop the 8x repetition
 
-1. **Call `this.insightEngine.start()` after boot** (fusion-loader, after line 1056)
-2. **Add `insights.jsonl` readback to `PersistentMemoryLoop.buildSummary()`**:
-   ```javascript
-   // 5. From insights.jsonl — previously surfaced insights (dedup signal)
-   const insights = this._readJsonl(path.join(this.dataPath, 'insights.jsonl'));
-   if (insights.length > 0) {
-       sections.push('## Previously Surfaced Insights (DO NOT REDERIVE)\n' +
-           insights.slice(-10).map(i => `- ${i.summary}`).join('\n'));
-   }
-   ```
-3. **Inject `summaryContext` into `_buildSystemPrompt`**:
-   ```javascript
-   // In mega_brain.js _buildSystemPrompt, before returning:
-   let memSummary = '';
-   if (this._fusion?.persistentMemoryLoop?.buildSummary) {
-       try { memSummary = await this._fusion.persistentMemoryLoop.buildSummary(); } catch(e) {}
-   }
-   ```
-   (Change `_buildSystemPrompt` to async, or pre-compute summary in `_nineRouter`)
-4. **Guard line 989**: `if (this.perpetualConsciousness) this.perpetualConsciousness.start();`
+1. **✅ Added `insights.jsonl` readback to `PersistentMemoryLoop.buildSummary()`**
+   — `persistent_memory_loop.js` now reads `insights.jsonl` and includes a
+   "Previously Surfaced Insights (DO NOT REDERIVE)" section in the summary.
 
-### P1 — Mark executed goals as complete
+2. **✅ Injected `summaryContext` into `MegaBrain._nineRouter`**
+   — `_nineRouter` now calls `persistentMemoryLoop.buildSummary()` (cached 5min)
+   and passes the result to `_buildSystemPrompt(soul_context, memSummary)`.
+   The system prompt now includes persistent memory context.
 
-5. **GoalEngine should return `null` when a proposed goal matches an already-completed one**, not return the old goal object.
+3. **✅ Guarded telemetry registrations and `perpetualConsciousness.start()`**
+   — Each `.stats` access in the telemetryRegistrations block now has a null guard.
+   — `this.perpetualConsciousness.start()` is now `if (this.perpetualConsciousness) this.perpetualConsciousness.start();`
+
+### P1 — Mark executed goals as complete (PENDING)
+
+4. **GoalEngine should return `null` when a proposed goal matches an already-completed one**, not return the old goal object. This requires adding a `status === 'completed'` check in `GoalEngine.create()`.
 
 ---
 
