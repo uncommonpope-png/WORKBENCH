@@ -43,6 +43,9 @@ profit-brain/journal-entries/live-journal.json
 # Model outputs
 model_results.txt
 
+check_hf.py
+check_hf2.py
+
 # Transient directories
 C/
 WORKBENCH_FRESH/
