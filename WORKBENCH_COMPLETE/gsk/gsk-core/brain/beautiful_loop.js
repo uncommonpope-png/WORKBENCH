@@ -333,7 +333,7 @@ class BeautifulLoop {
         const topics = perceived.opportunities?.slice(0, 3) || ['autonomous building', 'self-improvement'];
         for (const topic of topics) {
             try {
-                await this.researcher.research(topic, { depth: 2 });
+                await this.researcher.researchTopic(topic);
             } catch (e) {}
         }
 

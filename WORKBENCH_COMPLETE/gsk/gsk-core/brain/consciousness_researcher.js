@@ -143,6 +143,14 @@ class ConsciousnessResearcher {
         return null;
     }
 
+    /**
+     * Alias for researchTopic — backward compatibility for callers using
+     * `researcher.research(topic)` pattern.
+     */
+    async research(topic) {
+        return this.researchTopic(topic);
+    }
+
     async researchTopic(topic) {
         if (!this.brain || !this.brain.think) return null;
 
