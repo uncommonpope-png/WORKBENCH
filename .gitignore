@@ -13,8 +13,8 @@ coverage
 .env
 *.local
 *.cjs
+!launch-family.cjs
 god-mode*.cjs
-post-mastodon.js
 market-scanner.cjs
 profit-prime.cjs
 prophet-agent.js
