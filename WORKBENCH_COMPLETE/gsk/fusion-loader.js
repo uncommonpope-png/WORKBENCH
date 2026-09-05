@@ -987,7 +987,7 @@ class GSKFusion {
             });
 
             if (this.perpetualConsciousness) this.perpetualConsciousness.start();
-            console.log(`  [FUSION] ✓ Perpetual consciousness started (${this.perpetualConsciousness.thoughtFrequency}ms controlled cycle)`);
+            console.log(`  [FUSION] ✓ Perpetual consciousness started (${this.perpetualConsciousness?.thoughtFrequency || 1000}ms controlled cycle)`);
 
             // ── CRON SCHEDULER (from SCRIBE) ──────────────────────
             const { ops: cronOps, setFusion: setCronFusion } = require('./gsk-core/skills/cron_schedule.js');
