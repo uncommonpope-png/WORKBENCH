@@ -48,13 +48,15 @@ class ApprovedToolExecutor {
     constructor(kernel, options = {}) {
         this.kernel = kernel;
         this.requireApprovalAt = options.requireApprovalAt || 'medium';
+        // FIX: Dokku/Ansible deploy needs more headroom — was choking at 45s timeout / 5 steps
+        // Bump for deploy-type plans via _budget override; keep safe defaults for explore
         this.defaultBudget = {
-            maxSteps: options.maxSteps ?? 5,
-            maxTax: options.maxTax ?? 1.5,
-            maxDurationMs: options.maxDurationMs ?? 60000,
-            maxToolCalls: options.maxToolCalls ?? 5
+            maxSteps: options.maxSteps ?? 8,
+            maxTax: options.maxTax ?? 2.5,
+            maxDurationMs: options.maxDurationMs ?? 120000,
+            maxToolCalls: options.maxToolCalls ?? 8
         };
-        this.stepTimeoutMs = options.stepTimeoutMs ?? 30000;
+        this.stepTimeoutMs = options.stepTimeoutMs ?? 45000;
         this.pendingApprovals = new Map();
         this.planBudgets = new Map();
         this.history = [];

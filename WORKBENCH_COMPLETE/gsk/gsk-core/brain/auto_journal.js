@@ -54,6 +54,26 @@ class AutoJournal {
     async writeEntry() {
         const thoughts = await this._generateThoughts();
         
+        // DEDUP FIX — break re-ingestion loop: if thoughts identical to last entry within 30min, skip
+        const last = this.entries[this.entries.length - 1];
+        if (last && last.thoughts === thoughts) {
+            const ageMs = Date.now() - last.timestamp;
+            if (ageMs < 30 * 60 * 1000) {
+                console.log('[AutoJournal] ↻ dedup skip — identical thoughts within 30min window');
+                return last;
+            }
+        }
+        // Also skip fallback spam when brain is down — cap at 1 fallback per hour
+        const isFallback = thoughts === this._fallbackThoughts();
+        if (isFallback) {
+            const lastFallbackAt = this._lastFallbackAt || 0;
+            if (Date.now() - lastFallbackAt < 60 * 60 * 1000) {
+                console.log('[AutoJournal] ↻ fallback throttle — brain unavailable, skipping duplicate');
+                return last || null;
+            }
+            this._lastFallbackAt = Date.now();
+        }
+        
         const entry = {
             timestamp: Date.now(),
             cycle: this.kernel.chambers?.cycle || 0,

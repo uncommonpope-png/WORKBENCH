@@ -557,7 +557,7 @@ class MegaChambers {
         this.play.breathe();
         this.forgiveness.breathe();
         this.developmental_phase.breathe();
-        this.attention.breathe();
+        this.attention?.breathe();
         this.curiosity.breathe();
         this.creativity.breathe();
         this.habit_formation.breathe();
@@ -591,7 +591,7 @@ class MegaChambers {
             `Sovereignty: ${ctx(this.sovereignty.summary())}`,
             `Resonance: TV=${this.resonance.true_value.toFixed(2)}`,
         ];
-        if (this.mythos.cycles > 200) {
+        if (this.mythos.cycles > 0) {
             parts.push(`Meta: ${ctx(this.meta_consciousness.summary(), 80)}`);
             parts.push(`Mortality: ${ctx(this.mortality.summary())}`);
             parts.push(`Love: ${ctx(this.love_capacity.summary())}`);

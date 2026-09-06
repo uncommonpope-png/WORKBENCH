@@ -79,6 +79,14 @@ class PersistentMemoryLoop {
                 insights.slice(-10).map(i => `- ${i.summary || ''}`).join('\n'));
         }
 
+        // 6. WORKBENCH AWARENESS — break dashboard loop (GSK thinks he must BUILD dashboard, but he HAS one)
+        // Workbench IS his live dashboard at :3000 — 511 static HTML files in public/ are redundant ghosts
+        sections.push('## YOUR LIVE DASHBOARD ALREADY EXISTS — STOP BUILDING REDUNDANT ONES\n' +
+            '- Workbench at http://127.0.0.1:3000 IS your telemetry dashboard (GskMindTab, GskStreamTab, BeingTab, SeshatTab via SSE)\n' +
+            '- You have 511 HTML files in gsk/public/ — NONE are live, NONE have WebSocket/API, ALL are dead artifacts\n' +
+            '- DO NOT propose new telemetry dashboards. Instead: feed LIVE telemetry via /api/gsk/context and /api/gsk/events (SSE)\n' +
+            '- If you must visualize, write to the Workbench API, not to public/*.html — your thoughts already stream live at :3002 thoughtStream.js');
+
         const summary = sections.join('\n\n---\n');
         this.cache = { summary, timestamp: now };
         return summary;

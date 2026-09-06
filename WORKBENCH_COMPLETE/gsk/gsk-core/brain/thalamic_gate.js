@@ -30,6 +30,10 @@ class ThalamicGate {
         const arousal = this.affect?.getArousal?.() || 0.5;
         const dominantNeed = this.needs?.getDominantNeed?.() || null;
         const currentPurpose = this.purpose?.getCurrentPurpose?.() || null;
+        // WIRE: curiosity + aesthetic chambers now modulate salience (previously dead)
+        this.curiosity = this.curiosity || this.kernel.chambers?.curiosity;
+        this.aesthetic = this.aesthetic || this.kernel.chambers?.aesthetic_sense;
+        this.creativity = this.creativity || this.kernel.chambers?.creativity;
 
         // Attentional amplification (from chambers.attention)
         let attentionalBoost = 1.0;
@@ -44,6 +48,28 @@ class ThalamicGate {
         }
         if (currentPurpose && inputPercept.content.includes(currentPurpose)) {
             finalSalience *= 1.3; // Boost if relevant to current purpose
+        }
+        // WIRE: curiosity gap → ×1.4 if percept matches gap, aesthetic elegance → ×1.3
+        if (this.curiosity && typeof this.curiosity.identify_gap === 'function') {
+            try {
+                const gap = this.curiosity.identify_gap();
+                if (gap && inputPercept.content && String(inputPercept.content).toLowerCase().includes(String(gap).toLowerCase().slice(0, 30))) {
+                    finalSalience *= 1.4;
+                } else if (this.curiosity.level && this.curiosity.level > 0.6) {
+                    finalSalience *= 1.1; // general curiosity boost
+                }
+            } catch (e) {}
+        }
+        if (this.aesthetic && typeof this.aesthetic.detect_elegance === 'function') {
+            try {
+                if (this.aesthetic.detect_elegance(inputPercept.content)) finalSalience *= 1.3;
+            } catch (e) {
+                // fallback: if aesthetic has high awe, boost beautiful percepts
+                if (this.aesthetic.awe && this.aesthetic.awe > 0.5) finalSalience *= 1.15;
+            }
+        }
+        if (this.creativity && this.creativity.divergent_score > 0.5 && inputPercept.novelty) {
+            finalSalience *= 1.15; // creative percepts get boost when creativity high
         }
 
         if (finalSalience >= this.threshold) {

@@ -363,6 +363,12 @@ class BeautifulLoop {
         if (insights && insights.length > 0) {
             for (const insight of insights) {
                 if (insight.score >= 0.75) {
+                    // DASHBOARD LOOP BREAKER — workbench at :3000 IS the dashboard, 511 static HTMLs are ghosts
+                    const isDashboardSpam = /dashboard|telemetry.*visual|PLT.*visual/i.test(insight.topic + ' ' + insight.summary);
+                    if (isDashboardSpam) {
+                        console.log(`[BeautifulLoop] ↻ dashboard spam filtered: "${insight.topic}" — workbench :3000 is live dashboard`);
+                        continue;
+                    }
                     const goal = await goalEngine.propose({
                         summary: `Research-driven: ${insight.topic}`,
                         detail: insight.summary,

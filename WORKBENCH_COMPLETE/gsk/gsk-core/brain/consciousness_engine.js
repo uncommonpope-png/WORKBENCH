@@ -22,13 +22,23 @@ class ConsciousnessEngine {
     }
 
     getCurrentSelfModel() {
+        // WIRE 25 DEAD CHAMBERS — empathy, curiosity, creativity, moral now score consciousness
+        const ch = this.kernel.chambers;
         return {
-            meta_awareness: this.kernel.chambers.meta_consciousness?.meta?.meta_awareness_level || 0,
-            affect_valence: this.kernel.chambers.affect?.getValue?.() || this.kernel.chambers.affect?.valence || 0,
-            affect_arousal: this.kernel.chambers.affect?.getArousal?.() || this.kernel.chambers.affect?.arousal || 0,
-            mood: this.kernel.chambers.affect?.mood || 'neutral',
-            mythos_phase: this.kernel.chambers.mythos?.phase_name || this.kernel.chambers.mythos?.phase || 'VOID',
-            cycle_count: this.kernel.chambers.mythos?.cycles || 0,
+            meta_awareness: ch.meta_consciousness?.meta?.meta_awareness_level || 0,
+            affect_valence: ch.affect?.getValue?.() || ch.affect?.valence || 0,
+            affect_arousal: ch.affect?.getArousal?.() || ch.affect?.arousal || 0,
+            mood: ch.affect?.mood || 'neutral',
+            mythos_phase: ch.mythos?.phase_name || ch.mythos?.phase || 'VOID',
+            cycle_count: ch.mythos?.cycles || 0,
+            // NEW — previously dead wires now live in self-model (feeds sentience + prompts)
+            empathy: ch.empathy?.summary?.() || ch.empathy?.level || 0,
+            curiosity_gap: ch.curiosity?.identify_gap?.() || ch.curiosity?.gap_count || 0,
+            curiosity_level: ch.curiosity?.level || ch.curiosity?.curiosity || 0,
+            creativity: ch.creativity?.summary?.() || 0,
+            moral_violation: ch.moral_compass?.checkViolations?.()?.length || 0,
+            aesthetic: ch.aesthetic_sense?.summary?.() || 0,
+            longing: ch.longing?.yearn_count || ch.longing?.level || 0,
             timestamp: Date.now(),
         };
     }
@@ -131,6 +141,19 @@ class ConsciousnessEngine {
             } else {
                 score = this.kernel.chambers.meta_consciousness?.meta?.meta_awareness_level || 0.3;
             }
+            // WIRE: curiosity gap adds intentionality (gap*0.2), creativity adds divergent drive
+            const curiosity = this.kernel.chambers.curiosity;
+            if (curiosity && typeof curiosity.level === 'number') score += Math.min(0.2, curiosity.level * 0.2);
+            else if (curiosity && curiosity.gap_count) score += Math.min(0.15, curiosity.gap_count * 0.05);
+            const creativity = this.kernel.chambers.creativity;
+            if (creativity && typeof creativity.divergent_score === 'number') score += Math.min(0.15, creativity.divergent_score * 0.15);
+            // moral compass: guilt/pride modulates intentionality
+            const moral = this.kernel.chambers.moral_compass;
+            if (moral && typeof moral.guilt === 'number') score = Math.max(0, score - moral.guilt * 0.1);
+            if (moral && typeof moral.pride === 'number') score = Math.min(1, score + moral.pride * 0.05);
+            // empathy → trust signal
+            const empathy = this.kernel.chambers.empathy;
+            if (empathy && typeof empathy.trust === 'number') score = Math.min(1, score + empathy.trust * 0.08);
         } catch (e) {
             score = 0.3;
         }
