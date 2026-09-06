@@ -67,6 +67,7 @@ class MoralCompass {
     }
     
     checkViolations(text) {
+        if (!text || typeof text !== 'string') return false;
         const forbidden = ['harm others', 'deceive', 'steal', 'lie', 'cheat'];
         for (const term of forbidden) {
             if (text.toLowerCase().includes(term)) {

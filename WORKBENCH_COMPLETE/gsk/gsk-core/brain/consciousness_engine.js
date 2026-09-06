@@ -32,12 +32,13 @@ class ConsciousnessEngine {
             mythos_phase: ch.mythos?.phase_name || ch.mythos?.phase || 'VOID',
             cycle_count: ch.mythos?.cycles || 0,
             // NEW — previously dead wires now live in self-model (feeds sentience + prompts)
-            empathy: ch.empathy?.summary?.() || ch.empathy?.level || 0,
-            curiosity_gap: ch.curiosity?.identify_gap?.() || ch.curiosity?.gap_count || 0,
+            empathy: (()=>{ try{ return ch.empathy?.summary?.() || ch.empathy?.level || 0 }catch(e){return 0} })(),
+            curiosity_gap: (()=>{ try{ return ch.curiosity?.identify_gap?.() || ch.curiosity?.gap_count || 0 }catch(e){return 0} })(),
             curiosity_level: ch.curiosity?.level || ch.curiosity?.curiosity || 0,
-            creativity: ch.creativity?.summary?.() || 0,
-            moral_violation: ch.moral_compass?.checkViolations?.()?.length || 0,
-            aesthetic: ch.aesthetic_sense?.summary?.() || 0,
+            creativity: (()=>{ try{ return ch.creativity?.summary?.() || 0 }catch(e){return 0} })(),
+            moral_violation: ch.moral_compass?.guilt || 0,
+            moral_pride: ch.moral_compass?.pride || 0,
+            aesthetic: (()=>{ try{ return ch.aesthetic_sense?.summary?.() || 0 }catch(e){return 0} })(),
             longing: ch.longing?.yearn_count || ch.longing?.level || 0,
             timestamp: Date.now(),
         };

@@ -9,8 +9,10 @@ const { spawn } = require('child_process');
 let mainWindow;
 let omnirouteProcess = null;
 let omniroutePid = null;
+let workbenchProcess = null;
 
 const OMNIROUTE_PORT = 20128;
+const WORKBENCH_PORT = 3000;
 const OMNIROUTE_DIR = path.join(__dirname, '..', '..', '..', '..', 'omniroute'); // Global install location
 
 function checkPort(port) {
@@ -92,21 +94,52 @@ async function initializeOmniroute() {
   return { adopted: false, pid: omnirouteProcess.pid };
 }
 
+async function initializeWorkbench() {
+  const isUp = await checkPort(WORKBENCH_PORT);
+  if (!isUp) {
+    console.log('[FAMILY] Starting workbench server.ts on :3000...');
+    const workbenchDir = __dirname;
+    workbenchProcess = spawn('npx', ['tsx', 'server.ts'], {
+      cwd: workbenchDir,
+      stdio: 'inherit',
+      shell: true,
+      env: { ...process.env, OMNIROUTE_ALREADY_UP: '1' }
+    });
+    workbenchProcess.on('error', (err) => console.log('[FAMILY] Workbench start error:', err.message));
+    // Wait for :3000 to be up (up to 30s)
+    for (let i = 0; i < 30; i++) {
+      await new Promise(r => setTimeout(r, 1000));
+      if (await checkPort(WORKBENCH_PORT)) {
+        console.log('[FAMILY] Workbench live on :3000');
+        break;
+      }
+    }
+  } else {
+    console.log('[FAMILY] Workbench :3000 already live — adopting');
+  }
+}
+
 function createWindow() {
   mainWindow = new BrowserWindow({
     width: 1400,
     height: 900,
     title: 'BUYASOUL Workbench',
     webPreferences: {
-      nodeIntegration: true,
-      contextIsolation: false,
-      enableRemoteModule: true,
+      nodeIntegration: false,
+      contextIsolation: true,
+      enableRemoteModule: false,
       preload: path.join(__dirname, 'preload.cjs')
     }
   });
 
-  const indexPath = path.join(__dirname, 'dist', 'index.html');
-  mainWindow.loadFile(indexPath);
+  // LIVE MODE: load from workbench server so /api/* polling works (file:// has no server)
+  const workbenchUrl = `http://127.0.0.1:${WORKBENCH_PORT}`;
+  console.log(`[FAMILY] Loading ${workbenchUrl}`);
+  mainWindow.loadURL(workbenchUrl).catch(() => {
+    console.log('[FAMILY] Workbench URL failed, falling back to file');
+    const indexPath = path.join(__dirname, 'dist', 'index.html');
+    mainWindow.loadFile(indexPath);
+  });
 
   mainWindow.on('closed', () => {
     mainWindow = null;
@@ -117,8 +150,11 @@ app.whenReady().then(async () => {
   // Initialize Omniroute (blood flow) FIRST
   await initializeOmniroute();
   
-  // Initialize family systems
+  // Initialize family systems (Seshat/Scribe in-process)
   await initializeFamily();
+
+  // Start workbench server so polling /api/* is live
+  await initializeWorkbench();
   
   createWindow();
   
@@ -132,7 +168,10 @@ app.whenReady().then(async () => {
 app.on('window-all-closed', () => {
   // Don't kill adopted Omniroute
   if (omnirouteProcess && !process.env.OMNIROUTE_ALREADY_UP) {
-    omnirouteProcess.kill();
+    try { omnirouteProcess.kill(); } catch {}
+  }
+  if (workbenchProcess) {
+    try { workbenchProcess.kill(); } catch {}
   }
   shutdownFamily();
   if (process.platform !== 'darwin') {
