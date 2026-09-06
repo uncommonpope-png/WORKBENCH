@@ -93,7 +93,7 @@ export const VaultAndMemory: React.FC<VaultAndMemoryProps> = ({ accentColor }) =
   const [newMemoryCat, setNewMemoryCat] = useState<"episodic" | "semantic" | "procedural">("semantic");
   const [newMemorySim, setNewMemorySim] = useState(0.85);
 
-  // Load Vault and Memories from LocalStorage
+  // Load Vault and Memories from LocalStorage + Server (now live, not stub)
   useEffect(() => {
     const savedVault = localStorage.getItem("agent_workbench_vault_keys");
     if (savedVault) {
@@ -103,6 +103,12 @@ export const VaultAndMemory: React.FC<VaultAndMemoryProps> = ({ accentColor }) =
         console.error("Failed to parse saved keys vault", e);
       }
     }
+    // Also hydrate from server vault (persisted to .vault/vault.json)
+    fetch("/api/vault").then(r=>r.json()).then(d=>{
+      if (d.success && d.vault && Object.keys(d.vault).length) {
+        setVault(prev=>({...prev, ...d.vault}));
+      }
+    }).catch(()=>{});
 
     const savedMemories = localStorage.getItem("agent_workbench_vector_memories");
     if (savedMemories) {
@@ -112,11 +118,32 @@ export const VaultAndMemory: React.FC<VaultAndMemoryProps> = ({ accentColor }) =
         console.error("Failed to parse saved memories", e);
       }
     }
+    // Hydrate memories from GSK ledger live
+    fetch("/api/gsk/memories?limit=20").then(r=>r.json()).then(d=>{
+      if (d.success && Array.isArray(d.memories) && d.memories.length) {
+        const live = d.memories.slice(0,5).map((m:any, i:number)=>({
+          id: `live-${m.id||i}`,
+          key: m.type || "GSK Memory",
+          value: String(m.content || m.summary || "").slice(0, 200),
+          category: "semantic" as const,
+          cosineSim: 0.88,
+          timestamp: m.timestamp ? new Date(m.timestamp).toLocaleString() : new Date().toLocaleString()
+        }));
+        setMemories(prev=> prev.length===3 && prev[0].id==="mem-01" ? live : prev);
+      }
+    }).catch(()=>{});
   }, []);
 
-  const saveVaultKeys = () => {
+  const saveVaultKeys = async () => {
     localStorage.setItem("agent_workbench_vault_keys", JSON.stringify(vault));
-    setVaultStatusMsg("🛡️ SECURE KEY VAULT SYNCHRONIZED SUCCESSFULLY!");
+    // Also persist to server .vault/vault.json so it's not just localStorage stub
+    try {
+      const r = await fetch("/api/vault", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(vault) });
+      const j = await r.json();
+      setVaultStatusMsg(j.success ? "🛡️ VAULT LIVE — synced to server .vault/vault.json" : "🛡️ Saved locally (server unreachable)");
+    } catch {
+      setVaultStatusMsg("🛡️ Saved locally (server offline)");
+    }
     setTimeout(() => setVaultStatusMsg(null), 3000);
   };
 
