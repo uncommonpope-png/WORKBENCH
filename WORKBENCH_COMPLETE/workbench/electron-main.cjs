@@ -39,17 +39,19 @@ function getOmniPids() {
 }
 
 async function initializeOmniroute() {
-  // Check if Omniroute is already running on port 20128
+  // Check if Omniroute is already running on port 20128 — ADOPT BLOOD, NEVER KILL
   const isPortInUse = await checkPort(OMNIROUTE_PORT);
   const existingPids = getOmniPids();
   
   if (isPortInUse && existingPids.length > 0) {
+    updateLoading('OmniRoute blood flow already alive — adopting...');
     console.log('[FAMILY] Omniroute already running, adopting existing blood flow');
     omniroutePid = existingPids[0];
     return { adopted: true, pid: omniroutePid };
   }
   
   // Try to start Omniroute from global install
+  updateLoading('Starting OmniRoute blood flow...');
   console.log('[FAMILY] Starting Omniroute (blood flow)...');
   
   // Check common locations
@@ -68,8 +70,22 @@ async function initializeOmniroute() {
   }
   
   if (!omnirouteRoot) {
-    console.log('[FAMILY] Omniroute not found in global install, will use local mode');
-    return { adopted: false, pid: null };
+    updateLoading('OmniRoute not found — installing (first setup, one time)...');
+    console.log('[FAMILY] Omniroute not found — auto-installing (first setup)...');
+    try {
+      const { execSync } = require('child_process');
+      execSync('npm install -g omniroute', { stdio: 'inherit', timeout: 120000 });
+      // Re-check after install
+      for (const p of possiblePaths) {
+        if (fs.existsSync(path.join(p, 'package.json'))) { omnirouteRoot = p; break; }
+      }
+      if (!omnirouteRoot) throw new Error('install did not create omniroute dir');
+      updateLoading('OmniRoute installed — starting...');
+    } catch (e) {
+      console.log('[FAMILY] Omniroute auto-install failed:', e.message, '— continuing without it, workbench will still load');
+      updateLoading('OmniRoute install failed — workbench will load without it');
+      return { adopted: false, pid: null };
+    }
   }
   
   console.log(`[FAMILY] Starting Omniroute from: ${omnirouteRoot}`);
@@ -119,11 +135,56 @@ async function initializeWorkbench() {
   }
 }
 
+let loadingWindow = null;
+
+function createLoadingWindow() {
+  loadingWindow = new BrowserWindow({
+    width: 480,
+    height: 320,
+    frame: false,
+    transparent: true,
+    alwaysOnTop: true,
+    resizable: false,
+    center: true,
+    webPreferences: { nodeIntegration: true, contextIsolation: false }
+  });
+  const html = `
+    <html><head><style>
+      *{margin:0;padding:0;box-sizing:border-box}
+      body{background:#05050c;color:#fff;font-family:system-ui;display:flex;flex-direction:column;align-items:center;justify-content:center;height:100vh;text-align:center}
+      h1{font-size:28px;letter-spacing:4px;background:linear-gradient(90deg,#ff2d9e,#00d4ff);-webkit-background-clip:text;-webkit-text-fill-color:transparent;font-weight:900}
+      .sub{color:#888;font-size:11px;letter-spacing:2px;margin-top:6px}
+      .bar{width:260px;height:3px;background:#1a1a2e;border-radius:99px;margin-top:20px;overflow:hidden}
+      .fill{height:100%;background:linear-gradient(90deg,#ff2d9e,#00d4ff);width:0%;animation:fill 2s ease-in-out infinite}
+      .status{color:#ff2d9e;font-size:10px;margin-top:10px;font-family:monospace}
+      @keyframes fill{0%{width:0%}50%{width:100%}100%{width:0%}}
+    </style></head><body>
+      <h1>BUYASOUL</h1><div class="sub">PROFIT ♡ LOVE TAX — THE FAMILY IS AWAKENING</div>
+      <div class="bar"><div class="fill"></div></div>
+      <div class="status" id="status">Loading workbench...</div>
+      <script>
+        const { ipcRenderer } = require('electron');
+        ipcRenderer.on('loading-status', (e, msg)=>{ document.getElementById('status').innerText = msg; });
+      </script>
+    </body></html>`;
+  loadingWindow.loadURL('data:text/html;charset=utf-8,' + encodeURIComponent(html));
+  loadingWindow.show();
+}
+
+function updateLoading(msg) {
+  console.log('[LOADING] ' + msg);
+  if (loadingWindow && !loadingWindow.isDestroyed()) {
+    loadingWindow.webContents.send('loading-status', msg);
+  }
+}
+
 function createWindow() {
   mainWindow = new BrowserWindow({
     width: 1400,
     height: 900,
-    title: 'BUYASOUL Workbench',
+    title: 'BUYASOUL — The Profit LoveTax Family',
+    icon: path.join(__dirname, 'public', 'icon.ico'),
+    show: false,
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,
@@ -141,21 +202,32 @@ function createWindow() {
     mainWindow.loadFile(indexPath);
   });
 
+  mainWindow.once('ready-to-show', () => {
+    if (loadingWindow && !loadingWindow.isDestroyed()) loadingWindow.close();
+    mainWindow.show();
+    mainWindow.maximize();
+  });
+
   mainWindow.on('closed', () => {
     mainWindow = null;
   });
 }
 
 app.whenReady().then(async () => {
-  // Initialize Omniroute (blood flow) FIRST
+  createLoadingWindow();
+  updateLoading('Waking OmniRoute blood flow...');
+  // Initialize Omniroute (blood flow) FIRST — adopt or auto-install
   await initializeOmniroute();
   
+  updateLoading('Breathing Seshat + Scribe into memory...');
   // Initialize family systems (Seshat/Scribe in-process)
   await initializeFamily();
 
+  updateLoading('Building workbench — Profit Love Tax family...');
   // Start workbench server so polling /api/* is live
   await initializeWorkbench();
   
+  updateLoading('Workbench live — opening family...');
   createWindow();
   
   app.on('activate', () => {
