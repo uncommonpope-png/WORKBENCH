@@ -21,7 +21,21 @@
  *   const img = await mcp.generateImage('flux', 'a cat'); // REST API
  */
 
-const OMNIROUTE_BASE = process.env.OMNIROUTE_BASE_URL || 'http://localhost:20128';
+const OMNIROUTE_BASE = process.env.OMNIROUTE_URL || process.env.OMNIROUTE_BASE_URL || 'http://127.0.0.1:20128';
+
+function omniAuthKey() {
+    return process.env.OMNIROUTE_API_KEY || process.env.GSK_BRAIN_API_KEY || process.env.NINE_ROUTER_API_KEY || '';
+}
+
+function omniAuthHeaders(extra = {}) {
+    const headers = { 'Content-Type': 'application/json', ...extra };
+    const key = omniAuthKey();
+    if (key) {
+        headers['Authorization'] = 'Bearer ' + key;
+        headers['x-api-key'] = key;
+    }
+    return headers;
+}
 
 class OmniMcpClient {
   constructor() {
@@ -57,11 +71,10 @@ class OmniMcpClient {
 
     const res = await fetch(`${this.baseUrl}/api/mcp/stream`, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
+      headers: omniAuthHeaders({
         Accept: 'application/json, text/event-stream',
         'mcp-session-id': '',
-      },
+      }),
       body: JSON.stringify(initMsg),
     });
 
@@ -112,10 +125,9 @@ class OmniMcpClient {
       params,
     };
 
-    const headers = {
-      'Content-Type': 'application/json',
+    const headers = omniAuthHeaders({
       Accept: 'application/json, text/event-stream',
-    };
+    });
 
     if (this.sessionId) {
       headers['mcp-session-id'] = this.sessionId;
@@ -227,7 +239,7 @@ class OmniMcpClient {
 
     const res = await fetch(`${this.baseUrl}/v1/images/generations`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: omniAuthHeaders(),
       body: JSON.stringify(body),
     });
 
@@ -245,7 +257,7 @@ class OmniMcpClient {
   async listImageModels() {
     const res = await fetch(`${this.baseUrl}/v1/images/generations`, {
       method: 'GET',
-      headers: { 'Content-Type': 'application/json' },
+      headers: omniAuthHeaders(),
     });
 
     if (!res.ok) {
@@ -277,7 +289,7 @@ class OmniMcpClient {
 
     const res = await fetch(`${this.baseUrl}/v1/videos/generations`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: omniAuthHeaders(),
       body: JSON.stringify(body),
     });
 
@@ -295,7 +307,7 @@ class OmniMcpClient {
   async listVideoModels() {
     const res = await fetch(`${this.baseUrl}/v1/videos/generations`, {
       method: 'GET',
-      headers: { 'Content-Type': 'application/json' },
+      headers: omniAuthHeaders(),
     });
 
     if (!res.ok) {
@@ -322,7 +334,7 @@ class OmniMcpClient {
 
     const res = await fetch(`${this.baseUrl}/v1/chat/completions`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: omniAuthHeaders(),
       body: JSON.stringify(body),
     });
 
@@ -442,7 +454,7 @@ class OmniMcpClient {
   async getStatus() {
     const res = await fetch(`${this.baseUrl}/api/mcp/status`, {
       method: 'GET',
-      headers: { 'Content-Type': 'application/json' },
+      headers: omniAuthHeaders(),
     });
 
     if (!res.ok) {
@@ -459,10 +471,7 @@ class OmniMcpClient {
     if (this.sessionId) {
       await fetch(`${this.baseUrl}/api/mcp/stream`, {
         method: 'DELETE',
-        headers: {
-          'Content-Type': 'application/json',
-          'mcp-session-id': this.sessionId,
-        },
+        headers: omniAuthHeaders({ 'mcp-session-id': this.sessionId }),
       });
     }
     this.initialized = false;

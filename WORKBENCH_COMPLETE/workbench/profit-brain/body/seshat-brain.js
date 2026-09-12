@@ -348,11 +348,13 @@ async function summarize(text) {
 async function searchAndGenerate(query, modelKey = 'phi3') {
   const { hybridSearch } = require('./seshat/core/index.js');
   const { think } = require('./seshat/core/index.js');
-  
-  const results = await hybridSearch(new Array(384).fill(0.1), query, 10);
-  const context = results.map(r => r.text.substring(0, 200)).join('\n---\n');
+
+  // P4d: index.js exports the TEXT hybrid search (query, options) — the old
+  // call passed a dummy fill(0.1) vector, so every search embedded garbage.
+  const results = await hybridSearch(String(query || ''), { limit: 10 });
+  const context = (results || []).map(r => String(r.text || '').substring(0, 200)).filter(Boolean).join('\n---\n');
   const thought = await think(query, `Retrieved context:\n${context}`);
-  
+
   return { results, thought };
 }
 

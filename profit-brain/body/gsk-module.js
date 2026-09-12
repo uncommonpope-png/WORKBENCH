@@ -13,10 +13,23 @@
 
 const path = require('path');
 
-// GSK lives in the WORKBENCH_COMPLETE tree — resolve from this module's dir
-// (profit-brain/body → two up = repo root → WORKBENCH_COMPLETE/gsk)
-const GS_ROOT = path.join(__dirname, '..', '..', 'WORKBENCH_COMPLETE', 'gsk');
-const GSK_DIR = process.env.GSK_DIR || GS_ROOT;
+// GSK lives in the WORKBENCH_COMPLETE tree — resolve robustly because this
+// module exists in TWO layouts: repo-root profit-brain/body (two up = repo
+// root) and workbench profit-brain/body (three up = WORKBENCH_COMPLETE).
+const fs = require('fs');
+function resolveGskDir() {
+  const candidates = [
+    process.env.GSK_DIR,
+    path.join(__dirname, '..', '..', 'WORKBENCH_COMPLETE', 'gsk'),
+    path.join(__dirname, '..', '..', '..', 'gsk'),
+    path.join(__dirname, '..', '..', 'gsk'),
+  ].filter(Boolean);
+  for (const c of candidates) {
+    try { if (fs.existsSync(path.join(c, 'fusion-loader.js'))) return c; } catch {}
+  }
+  return candidates[1];
+}
+const GSK_DIR = resolveGskDir();
 
 let fusion = null;
 let _initialized = false;

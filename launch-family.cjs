@@ -26,6 +26,14 @@ const OMNIROUTE_SCRIPT = path.join(
   "server.ts"
 );
 
+function isListening(port) {
+  try {
+    const { execSync } = require("child_process");
+    const out = execSync(`netstat -ano | findstr LISTENING | findstr :${port}`, { encoding: "utf8", timeout: 4000 });
+    return out.trim().length > 0;
+  } catch { return false; }
+}
+
 function checkPort(port) {
   return new Promise((resolve) => {
     const req = http.get(`http://127.0.0.1:${port}/api/system/status`, (res) => {
@@ -33,10 +41,13 @@ function checkPort(port) {
       res.on("data", (c) => (body += c));
       res.on("end", () => resolve(true));
     });
-    req.on("error", () => resolve(false));
+    req.on("error", () => {
+      // Hung but LISTENING = still BUSY (zombie) — don't spawn duplicate
+      resolve(isListening(port));
+    });
     req.setTimeout(2000, () => {
       req.destroy();
-      resolve(false);
+      resolve(isListening(port));
     });
   });
 }
@@ -46,10 +57,10 @@ function checkOmniroute() {
     const req = http.get(`http://127.0.0.1:${OMNIROUTE_PORT}/v1/models`, (res) => {
       resolve(true);
     });
-    req.on("error", () => resolve(false));
+    req.on("error", () => resolve(isListening(OMNIROUTE_PORT)));
     req.setTimeout(2000, () => {
       req.destroy();
-      resolve(false);
+      resolve(isListening(OMNIROUTE_PORT));
     });
   });
 }
@@ -74,10 +85,20 @@ async function main() {
   }
 
   // 3. Launch server.ts
+  // NOTE: the conductor pidfile (data/.conductor.pid) belongs to server.ts alone.
+  // If the launcher claims it first, the workbench sees ITS OWN boot as a
+  // "live duplicate" and refuses to start. Single-instance is enforced there.
   console.log("[LAUNCH] Starting TRUE family workbench (server.ts)...");
-  const child = spawn("npx", ["tsx", "server.ts"], {
+  const isWin = process.platform === "win32";
+  // Resolve npx relative to THIS Node binary — works regardless of PATH or install dir
+  const nodeBin = process.execPath; // e.g. C:\Program Files\nodejs\node.exe
+  const nodeDir = path.dirname(nodeBin);
+  const npxPath = path.join(nodeDir, isWin ? "npx.cmd" : "npx");
+  console.log(`[LAUNCH] Using npx at: ${npxPath}`);
+  const child = spawn(`"${npxPath}"`, ["tsx", "server.ts"], {
     cwd: path.dirname(OMNIROUTE_SCRIPT),
     stdio: "inherit",
+    shell: true, // shell:true required for quoted paths on Windows
     env: { ...process.env },
   });
 

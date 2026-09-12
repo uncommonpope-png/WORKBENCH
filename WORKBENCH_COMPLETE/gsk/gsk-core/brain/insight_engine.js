@@ -116,6 +116,11 @@ class InsightEngine {
 
   async _synthesize(pattern) {
     if (!this.thinkCallback) return null;
+    // P3.24: shared background budget.
+    try {
+      const { globalBudget } = require('./llm_budget.js');
+      if (!globalBudget.trySpend('insightEngine')) return null;
+    } catch {}
     try {
       const context = pattern.observations
         ? pattern.observations.slice(0, 8).map(item => item.content || item.summary || '').filter(Boolean).join(' | ')

@@ -144,6 +144,31 @@ class KnowledgeGraph {
         };
     }
 
+    // P4b: file continuity — the graph used to die with every process exit
+    // (rebuilt from jsonl each boot, cross-session links abandoned).
+    saveState(filePath) {
+        try {
+            fs.writeFileSync(filePath, JSON.stringify({ savedAt: Date.now(), ...this.export() }));
+            return this.nodes.size;
+        } catch (e) {
+            console.log('[KnowledgeGraph] save failed:', e.message);
+            return 0;
+        }
+    }
+
+    loadState(filePath) {
+        try {
+            if (!fs.existsSync(filePath)) return 0;
+            const data = JSON.parse(fs.readFileSync(filePath, 'utf8'));
+            if (!data || !Array.isArray(data.nodes)) return 0;
+            this.import(data);
+            return this.nodes.size;
+        } catch (e) {
+            console.log('[KnowledgeGraph] load failed:', e.message);
+            return 0;
+        }
+    }
+
     import(data) {
         this.nodes.clear();
         this.edges = [];

@@ -109,7 +109,7 @@ npm run build        # vite 2461 modules → dist/index.html 0.42kB + assets 2.8
 npx electron .       # one-click window (no installer, for test)
 # Installer (needs 12GB heap, no spaces in path):
 $env:NODE_OPTIONS="--max-old-space-size=8192"
-npx electron-builder --win nsis --publish never  # → dist/BUYASOUL Setup.exe + BUYASOUL.lnk
+npm run dist  # stages gsk-pkg + vite build + electron-builder → dist/BUYASOUL Setup.exe + BUYASOUL.lnk
 ```
 `package.json:15` `appId com.buyasoul.workbench` `win: nsis oneClick:true createDesktopShortcut:true` `extraResources: .transformers-cache + .seshat-vectors + profit-brain`
 

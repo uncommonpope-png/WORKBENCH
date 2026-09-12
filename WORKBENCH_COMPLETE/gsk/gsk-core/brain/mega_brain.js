@@ -90,8 +90,14 @@ class Brain {
     constructor(options = {}) {
         this.timeout = Number(options.timeout) || Number(process.env.GSK_BRAIN_TIMEOUT_S) || 300;
         this.temperature = options.temperature || 0.95;
-        this.max_tokens = options.max_tokens || 1024;
+        // Hard ceiling: never let a single reply exceed the memory/UX cap.
+        this.max_tokens = Math.min(Number(options.max_tokens) || 1024, 2048);
         this.nativeTools = options.nativeTools || null;
+        // Availability gate — initialized to true so chat can execute immediately on boot.
+        this._available = true;
+        // Continue-loop guard: user brain sets this false so one chat can never
+        // silently balloon into 6x the token cap (the "family went mute" bug).
+        this._allowContinue = options.allowContinue !== false;
         this._sovereignty = options.sovereignty || null;
         this._bible = null;
         this._bibleContext = null;
@@ -201,7 +207,10 @@ class Brain {
                 this._consultingBible = true;
                 try {
                     const bibleGuidance = await this._consultBible(prompt);
-                    console.log(`[Brain] Bible consulted: ${bibleGuidance.slice(0, 80)}...`);
+                    console.log(`[Brain] Bible consulted: ${String(bibleGuidance).slice(0, 80)}...`);
+                    // P2.14: the guidance used to die in the log. Append it to
+                    // the soul context so the model actually receives it.
+                    soul_context = String(soul_context || '') + '\n\n[BIBLE GUIDANCE]\n' + String(bibleGuidance || '').slice(0, 1000);
                 } finally {
                     this._consultingBible = false;
                 }
@@ -270,6 +279,7 @@ class Brain {
                 this._brainFailures = 0;
                 this._brainCooldownUntil = 0;
                 this._lastThinkUsedFallback = false;
+                this._available = true;
                 return result;
             } else {
                 console.error('[Brain] _nineRouter returned falsy result:', result);
@@ -277,6 +287,7 @@ class Brain {
         } catch (e) {
             console.log(`[Brain] OmniRoute failed: ${e.message}`);
             console.error('[Brain] _nineRouter threw exception:', e);
+            this._available = false;
         } finally {
             if (!priority) {
                 _globalBrainGate.release();
@@ -293,6 +304,7 @@ class Brain {
             console.warn(`[Brain] No model answered (failure ${this._brainFailures}/${failThreshold}). Will retry on next think.`);
         }
         console.error('[Brain] think() returning null at end of function');
+        this._available = false;
         this._lastThinkUsedFallback = true;
         return null;
     }
@@ -428,12 +440,18 @@ class Brain {
 
         for (const model of models) {
             try { require('../contract.js').checkModel(model); } catch (e) {}
-            const payloadObj = {                model: model,
+            const payloadObj = {
+                model: model,
                 messages,
-                max_tokens: this.max_tokens,
+                max_tokens: Math.min(this.max_tokens, 2048),
                 temperature: this.temperature,
                 stream: false,
             };
+            // Local llama-server (e.g. Qwen on :5000): request no chain-of-thought
+            // so thinking never leaks into replies or eats the token budget.
+            if (/127\.0\.0\.1:5000|localhost:5000|\b:5000\b/.test(String(this._routerUrl || url))) {
+                payloadObj.enable_thinking = false;
+            }
             // Native function calling: give the model a real tools array so it
             // emits structured tool_calls (finish_reason='tool_calls') instead of
             // fragile hand-rolled inline JSON that truncates on large content.
@@ -507,7 +525,7 @@ class Brain {
                     if (tcText) text = tcText;
                     this._sseToolCalls = null;
                 }
-                text = text.trim();
+                text = stripThinkingBlocks(text.trim());
                 let safety_counter = 0;
                 let messages_history = [
                     { role: 'system', content: system },
@@ -516,13 +534,13 @@ class Brain {
 
                 if (text) messages_history.push({ role: 'assistant', content: text });
 
-                while (finish_reason === 'length' && safety_counter < 5) {
+                while (finish_reason === 'length' && safety_counter < 5 && this._allowContinue !== false) {
                     safety_counter++;
                     messages_history.push({ role: 'user', content: 'Continue' });
                     const payload_iteration = JSON.stringify({
                         model: model,
                         messages: messages_history,
-                        max_tokens: this.max_tokens,
+                        max_tokens: Math.min(this.max_tokens, 2048),
                         temperature: this.temperature,
                         stream: false,
                     });
@@ -557,7 +575,7 @@ class Brain {
                         partial_content = (msg.content || msg.reasoning_content || '').trim();
                         finish_reason = data.choices?.[0]?.finish_reason;
                     }
-                    partial_content = partial_content.trim();
+                    partial_content = stripThinkingBlocks(partial_content.trim());
 
                     text += (text ? ' ' : '') + partial_content;
 
@@ -927,6 +945,15 @@ module.exports = {
     // W5 probe hooks (Governor schema verification)
     _w5: { w5SafeCut, w5SemanticTrim },
 };
+
+// ── THINKING-BLOCK STRIP (local Qwen): remove leaked <thinking>…</thinking> ──
+function stripThinkingBlocks(raw) {
+    if (!raw || typeof raw !== 'string') return raw;
+    let out = raw.replace(/<thinking>[\s\S]*?<\/thinking>/gi, '').trim();
+    const open = out.indexOf('<thinking>');
+    if (open !== -1) out = out.slice(0, open).trim();
+    return out;
+}
 
 // ── W5 SCHEMA HELPERS (CASE-011): semantic, boundary-safe trimming ──
 // Never sever <tool_call>/<function>/braces mid-tag. Cut only at line seams

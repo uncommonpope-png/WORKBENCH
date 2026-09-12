@@ -237,11 +237,16 @@ class SelfGrowingBrain {
     }
 
     getGrowthMetrics() {
+        // P4c: honest counters. ownBrain is NOT available (external pipeline
+        // required — see _checkOwnBrainAvailable), so ready-flags report the
+        // real gates instead of implying a switch that never flips.
         return {
             ...this.stats,
             knowledgeGraph: this.knowledgeGraph.getStatistics(),
-            readyForSelfTune: this.trainingData.length >= 50,
-            readyForOwnBrain: this.trainingData.length >= 20
+            ownBrainAvailable: false,
+            ownBrainReason: 'Local fine-tuned model requires external pipeline (HuggingFace/local)',
+            readyForSelfTune: this.trainingData.length >= 20,
+            readyForOwnBrain: false
         };
     }
 

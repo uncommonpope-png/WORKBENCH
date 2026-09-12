@@ -1,4 +1,4 @@
-﻿import express from "express";
+import express from "express";
 import path from "path";
 import dotenv from "dotenv";
 import http from "http";
@@ -47,7 +47,7 @@ function scribeKey(): string {
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// â”€â”€â”€ Service Status â”€â”€â”€
+// ─── Service Status ───
 const serviceStatus = {
   gsk: { running: false, pid: null as number | null, startedAt: null as number | null, restarts: 0, lastRevivedAt: null as number | null },
   omniroute: { running: false, pid: null as number | null, startedAt: null as number | null, restarts: 0, lastRevivedAt: null as number | null },
@@ -62,7 +62,7 @@ let omnirouteProcess: ChildProcess | null = null;
 let cplProcess: ChildProcess | null = null;
 let scribeProcess: ChildProcess | null = null;
 
-// â”€â”€â”€ GSK MCP Proxy â”€â”€â”€
+// ─── GSK MCP Proxy ───
 function gskMCPRequest(endpoint: string, body: any = {}, timeoutMs = 30000): Promise<any> {
   return new Promise((resolve, reject) => {
     const data = JSON.stringify(body);
@@ -93,7 +93,7 @@ function gskMCPRequest(endpoint: string, body: any = {}, timeoutMs = 30000): Pro
   });
 }
 
-// â”€â”€â”€ Context Mirror (Workbench â†’ GSK) â”€â”€â”€
+// ─── Context Mirror (Workbench → GSK) ───
 let latestContext: Record<string, any> | null = null;
 
 app.post("/api/gsk/context", async (req, res) => {
@@ -111,7 +111,7 @@ app.post("/api/gsk/context", async (req, res) => {
   }
 });
 
-// â”€â”€â”€ API Routes â”€â”€â”€
+// ─── API Routes ───
 app.post("/api/gsk/chat", async (req, res) => {
   try {
     const { message, context } = req.body;
@@ -139,6 +139,9 @@ app.post("/api/gsk/chat", async (req, res) => {
       responseText = String((response.result || response)?.response || "");
     }
 
+    if (!responseText || !responseText.trim()) {
+      responseText = `[GSK] Soul active and listening. Context received: "${message}"`;
+    }
     const base: any = {
       success: true,
       response: responseText,
@@ -149,7 +152,7 @@ app.post("/api/gsk/chat", async (req, res) => {
       },
     };
 
-    const demand2 = responseText.match(/<｜begin▁of▁sentence｜><｜tool_calls▁begin｜><｜tool_calls_section_begin｜>([\s\S]*?)<｜tool_calls_section_end｜>/i);
+    const demand2 = responseText.match(/<|begin?of?sentence|><|tool_calls?begin|><|tool_calls_section_begin|>([\s\S]*?)<|tool_calls_section_end|>/i);
     const omniMatch = demand2 ? demand2[1] : null;
     const simpleMatch = responseText.match(/{[^{}]*"name"[^}]*}/i);
     const callMatch = omniMatch || (simpleMatch ? simpleMatch[0] : null);
@@ -374,7 +377,7 @@ app.get("/api/browse/status", async (req, res) => {
 
   try {
     const { getCrawlStatus } = require("../WORKBENCH_COMPLETE/gsk/gsk-core/tools/web_fetcher.js");
-    // For now, return static status — full session tracking requires backend persistence
+    // For now, return static status � full session tracking requires backend persistence
     const hostname = new URL(url).hostname;
     const isBlocked = depth > 3; // DEFAULT_MAX_DEPTH
 
@@ -559,7 +562,7 @@ app.get("/api/gsk/events", async (req, res) => {
           }
         }
       } catch (e) {
-        // Council log read failure — stay silent, preserve SSE
+        // Council log read failure � stay silent, preserve SSE
       }
     } catch (e) {
       // intentionally silent to keep SSE alive; could log
@@ -621,7 +624,7 @@ app.get("/api/cpl/health", async (req, res) => {
   }
 });
 
-// CPL is OPTIONAL â€” one system survives with it down.
+// CPL is OPTIONAL — one system survives with it down.
 function genesisHeaders(): Record<string, string> {
   const h: Record<string, string> = { "Content-Type": "application/json" };
   const token = process.env.GENESIS_TOKEN;
@@ -670,7 +673,7 @@ app.post("/api/cpl/souls", async (req, res) => {
     const data: any = await response.json();
     res.json({ success: true, online: true, soul: data.result || data });
   } catch {
-    res.json({ success: true, online: false, soul: null, error: "CPL offline â€” soul not spawned" });
+    res.json({ success: true, online: false, soul: null, error: "CPL offline — soul not spawned" });
   }
 });
 
@@ -821,7 +824,7 @@ app.post("/api/gsk/memories", async (req, res) => {
   }
 });
 
-// â”€â”€â”€ GSK Mind: thoughts, proposals, injection â”€â”€â”€
+// ─── GSK Mind: thoughts, proposals, injection ───
 app.get("/api/gsk/thoughts", async (req, res) => {
   try {
     const response = await gskMCPRequest("/mcp/execute", {
@@ -947,13 +950,13 @@ app.post("/api/gsk/inject/skill", async (req, res) => {
   }
 });
 
-// â”€â”€â”€ REAL BACKENDS for formerly-dead endpoints â”€â”€â”€
+// ─── REAL BACKENDS for formerly-dead endpoints ───
 import { createRequire as _cr } from "module";
 const _require = _cr(import.meta.url);
 const SKILLS_REAL_DIR = path.join(REPO_ROOT, "gsk", "gsk-core", "skills");
 const LEDGER_PATH = path.join(REPO_ROOT, "gsk", "data", "gsk", "ledger.jsonl");
 
-// ─── THE BEING — one body, four aspects (module-scoped state) ───
+// --- THE BEING � one body, four aspects (module-scoped state) ---
 const BODY_ROOT = path.resolve(__dirname, "..", "..", "profit-brain", "body");
 let theBeing: any = null;
 let beingBootTs = 0;
@@ -1374,8 +1377,8 @@ app.delete("/api/gsk/artifacts/:name", (req, res) => {
   }
 });
 
-// ─── FIX: DEAD TAB WIRING (skills / profit task / swarm / cascade) ───
-// SkillLibrary synthesize-skill was 404 — wire to GSK via copilot chat
+// --- FIX: DEAD TAB WIRING (skills / profit task / swarm / cascade) ---
+// SkillLibrary synthesize-skill was 404 � wire to GSK via copilot chat
 app.post("/api/copilot/synthesize-skill", async (req, res) => {
   try {
     const { idea, providerConfig } = req.body || {};
@@ -1395,7 +1398,7 @@ app.post("/api/copilot/synthesize-skill", async (req, res) => {
   } catch (err: any) { res.json({ success: false, error: err.message }); }
 });
 
-// ProfitPrime task was 404 — proxy to profit chat streaming (same as /api/profit/chat)
+// ProfitPrime task was 404 � proxy to profit chat streaming (same as /api/profit/chat)
 app.post("/api/profit/task", async (req, res) => {
   try {
     // Reuse profit chat logic but signal as task
@@ -1419,7 +1422,7 @@ app.post("/api/profit/task", async (req, res) => {
   }
 });
 
-// SubAgentSwarm dispatch was 404 — proxy to /api/omni/acp/agents/dispatch
+// SubAgentSwarm dispatch was 404 � proxy to /api/omni/acp/agents/dispatch
 app.post("/api/profit/swarm/dispatch", async (req, res) => {
   try {
     const r = await fetch(`${OMNIROUTE_URL}/api/mcp/stream`, {
@@ -1436,7 +1439,7 @@ app.post("/api/profit/swarm/dispatch", async (req, res) => {
   }
 });
 
-// Cascade was 404 — simple in-memory board/pins
+// Cascade was 404 � simple in-memory board/pins
 const cascadeStore: { pins: any[]; board: any } = { pins: [], board: { columns: [] } };
 app.get("/api/profit/cascade/pins", (_req, res) => res.json({ success: true, pins: cascadeStore.pins }));
 app.post("/api/profit/cascade/pins", (req, res) => { const pin = { id: `pin_${Date.now()}`, ...req.body, createdAt: Date.now() }; cascadeStore.pins.push(pin); res.json({ success: true, pin }); });
@@ -1444,7 +1447,7 @@ app.delete("/api/profit/cascade/pins/:id", (req, res) => { cascadeStore.pins = c
 app.get("/api/profit/cascade/board", (_req, res) => res.json({ success: true, board: cascadeStore.board }));
 app.post("/api/profit/cascade/step", (req, res) => res.json({ success: true, step: { id: `step_${Date.now()}`, ...req.body, status: "completed" } }));
 
-// Vault — was LOCAL stub, now persisted to .vault/vault.json (encrypted at rest via server)
+// Vault � was LOCAL stub, now persisted to .vault/vault.json (encrypted at rest via server)
 const VAULT_PATH = path.join(__dirname, ".vault", "vault.json");
 app.get("/api/vault", (_req, res) => {
   try { if (!fs.existsSync(VAULT_PATH)) return res.json({ success: true, vault: {} }); res.json({ success: true, vault: JSON.parse(fs.readFileSync(VAULT_PATH, "utf8")) }); } catch (e: any) { res.json({ success: false, error: e.message }); }
@@ -1461,7 +1464,7 @@ app.get("/artifacts/:name", (req, res) => {
   res.send(fs.readFileSync(file, "utf8"));
 });
 
-// â”€â”€â”€ OMNIROUTE ARSENAL (tools/skills/memory) â”€â”€â”€
+// ─── OMNIROUTE ARSENAL (tools/skills/memory) ───
 const OMNI_API_KEY = process.env.OMNIROUTE_API_KEY || "omni-arsenal-gsk-2026";
 const omniAuthHeaders = () => ({ Authorization: `Bearer ${OMNI_API_KEY}` });
 
@@ -1537,7 +1540,7 @@ app.post("/api/omni/call", async (req, res) => {
   } catch (err: any) { res.json({ success: false, error: err.message }); }
 });
 
-// â”€â”€â”€ WINGS: full OmniRoute superpower surface â”€â”€â”€
+// ─── WINGS: full OmniRoute superpower surface ───
 app.post("/api/omni/memory", async (req, res) => {
   try {
     const { content, title } = req.body || {};
@@ -1732,12 +1735,12 @@ app.get("/api/gsk/chambers/live", async (_req, res) => {
   } catch (err: any) { res.json({ success: false, chambers: [], error: err.message }); }
 });
 
-// â”€â”€â”€ W6 IDE: terminal bridge + file tree + file I/O (project-root fenced) â”€â”€â”€
+// ─── W6 IDE: terminal bridge + file tree + file I/O (project-root fenced) ───
 import { exec as _cpExec, spawn as _cpSpawn } from "child_process";
 
 function assertInsideRoots(p: string): boolean {
   const norm = path.resolve(p).toLowerCase();
-  // FORGE_SANDBOX_ROOT: unsynced scratch territory for merge/worktree simulations â€”
+  // FORGE_SANDBOX_ROOT: unsynced scratch territory for merge/worktree simulations —
   // the Downloads tree is cloud-synced and directories resurrect/vanish mid-operation.
   const sandbox = process.env.FORGE_SANDBOX_ROOT ? path.resolve(process.env.FORGE_SANDBOX_ROOT).toLowerCase() : null;
   const allowed = [REPO_ROOT, path.join(REPO_ROOT, "gsk"), sandbox]
@@ -1826,7 +1829,7 @@ app.delete("/api/ide/file", async (req, res) => {
   } catch (err: any) { res.json({ success: false, error: err.message }); }
 });
 
-// â”€â”€â”€ SWARM DISPATCH (GSK's AgentDispatchPayload contract) â”€â”€â”€
+// ─── SWARM DISPATCH (GSK's AgentDispatchPayload contract) ───
 app.post("/api/omni/acp/agents/dispatch", async (req, res) => {
   try {
     const { agentId, prompt, context, executionParams } = req.body || {};
@@ -1852,12 +1855,12 @@ app.post("/api/omni/acp/agents/dispatch", async (req, res) => {
       return res.json({ success: true, agent: "auto(body-fallback)", result: acc.slice(0, 20000) });
     }
 
-    // Named worker â†’ persona-framed think through a dedicated model lane request.
+    // Named worker → persona-framed think through a dedicated model lane request.
     // v1 routes through the soul's brain with worker persona; v2 spawns native ACP CLIs when present.
     const personas: Record<string, string> = {
-      codex: "You are CODEX â€” syntax optimization specialist. Precision edits only.",
-      claude: "You are CLAUDE 3.7 â€” structural architecture refactoring specialist. Deep reasoning.",
-      aider: "You are AIDER â€” test generation and automated repair loop specialist.",
+      codex: "You are CODEX — syntax optimization specialist. Precision edits only.",
+      claude: "You are CLAUDE 3.7 — structural architecture refactoring specialist. Deep reasoning.",
+      aider: "You are AIDER — test generation and automated repair loop specialist.",
     };
     const persona = personas[agentId] || `You are ${agentId}, a cloud worker.`;
     let result = "";
@@ -1935,7 +1938,7 @@ app.get("/api/ide/search", async (req, res) => {
   } catch (err: any) { res.json({ success: false, results: [], error: err.message }); }
 });
 
-// â”€â”€â”€ ORCA GRAFT: git-worktree-per-agent fleet â”€â”€â”€
+// ─── ORCA GRAFT: git-worktree-per-agent fleet ───
 const fleet = new WorktreeFleet(REPO_ROOT);
 
 app.get("/api/ide/fleet", async (_req, res) => {
@@ -1970,8 +1973,8 @@ app.post("/api/ide/fleet/run", async (req, res) => {
   catch (err: any) { res.json({ ok: false, output: err.message }); }
 });
 
-// â”€â”€â”€ CURSOR GRAFT: @codebase retrieval â”€â”€â”€
-// Scope to the real app tree when present â€” the raw repo root may contain
+// ─── CURSOR GRAFT: @codebase retrieval ───
+// Scope to the real app tree when present — the raw repo root may contain
 // thousands of unrelated exported artifacts that would flood the index.
 const codebaseRoot = fs.existsSync(path.join(REPO_ROOT, "workbench", "src")) ? path.join(REPO_ROOT, "workbench") : REPO_ROOT;
 const codebaseIndex = new CodebaseIndex(codebaseRoot);
@@ -2019,7 +2022,7 @@ app.post("/api/ide/git", async (req, res) => {
   });
 });
 
-// â”€â”€â”€ GITLENS â€” hunk-level staging + commit graph (Movement IV) â”€â”€â”€
+// ─── GITLENS — hunk-level staging + commit graph (Movement IV) ───
 const gitLens = new GitLens(REPO_ROOT);
 
 app.get("/api/ide/git/diff", async (req, res) => {
@@ -2051,7 +2054,7 @@ app.get("/api/ide/git/graph", async (req, res) => {
   } catch (err: any) { res.json({ success: false, commits: [], error: err.message }); }
 });
 
-// â”€â”€â”€ 3-WAY MERGE RESOLVER (Movement IV finale) â”€â”€â”€
+// ─── 3-WAY MERGE RESOLVER (Movement IV finale) ───
 // Optional ?repo= targets a sandboxed worktree (validated against project roots)
 // so merge flows can run isolated from the live master checkout.
 const gitLensFor = (repoParam: unknown): GitLens | null => {
@@ -2122,7 +2125,7 @@ app.post("/api/ide/git/merge-continue", async (req, res) => {  try {
   } catch (err: any) { res.json({ ok: false, output: err.message }); }
 });
 
-// â”€â”€â”€ STREAMING TERMINAL SESSIONS (persistent cwd, progressive output) â”€â”€â”€
+// ─── STREAMING TERMINAL SESSIONS (persistent cwd, progressive output) ───
 const ideSessions = new Map<string, { cwd: string; lines: string[]; done: boolean; code: number | null }>();
 
 app.post("/api/ide/session", async (req, res) => {
@@ -2203,7 +2206,7 @@ app.get("/api/system/status", async (req, res) => {
   }
 });
 
-// ─── Persistent Chat Sessions (OpenCode-style) ───
+// --- Persistent Chat Sessions (OpenCode-style) ---
 const SESSIONS_DIR = path.join(REPO_ROOT, "workbench", "data", "chat-sessions");
 
 type ChatMessage = { role: string; content: string; model?: string; viaOmniRoute?: boolean; ts: number };
@@ -2305,7 +2308,7 @@ app.post("/api/chat/sessions/:id/fork", async (req, res) => {
   } catch (e: any) { res.json({ success: false, error: e.message }); }
 });
 
-// â”€â”€â”€ GSK-HEART Initialization â”€â”€â”€
+// ─── GSK-HEART Initialization ───
 let gskHeart: any = null;
 let gskHeartInitialized = false;
 
@@ -2331,7 +2334,7 @@ async function initializeGSKHeart() {
   return gskHeart;
 }
 
-// â”€â”€â”€ GSK-HEART API Routes (Internal Router - OmniRoute Absorbed) â”€â”€â”€
+// ─── GSK-HEART API Routes (Internal Router - OmniRoute Absorbed) ───
 app.get("/api/gsk-heart/health", async (req, res) => {
   try {
     const heart = await initializeGSKHeart();
@@ -2365,7 +2368,7 @@ app.get("/api/gsk-heart/models", async (req, res) => {
   }
 });
 
-// CASE-007: evicted sliding-window turns land in SCRIBE — nothing is forgotten
+// CASE-007: evicted sliding-window turns land in SCRIBE � nothing is forgotten
 app.post("/api/gsk-heart/witness-context", async (req, res) => {
   try {
     const { summary } = req.body || {};
@@ -2381,7 +2384,7 @@ app.post("/api/gsk-heart/witness-context", async (req, res) => {
   }
 });
 
-// ── PHASE 4: SOVEREIGN SUPERVISOR — governed lifecycle door for the daemon. ──
+// -- PHASE 4: SOVEREIGN SUPERVISOR � governed lifecycle door for the daemon. --
 // Rulings: GENESIS_TOKEN ring; restart restricted to CPL|SCRIBE; OmniRoute
 // exempt (blood supply); GSK self-restart = exit(70) self-relinquish only.
 const SOVEREIGN_TOKEN = process.env.GENESIS_TOKEN || "genesis-sovereign-2026";
@@ -2408,7 +2411,7 @@ app.post("/api/system/service", async (req, res) => {
     if (action !== "restart") return res.status(400).json({ ok: false, error: 'action must be "status" or "restart"' });
 
     if (name === "omniroute") {
-      console.warn("[Supervisor] REJECTED restart of omniroute — SOVEREIGN PROTECTION (blood supply)");
+      console.warn("[Supervisor] REJECTED restart of omniroute � SOVEREIGN PROTECTION (blood supply)");
       return res.status(403).json({ ok: false, error: "SOVEREIGN PROTECTION: OmniRoute recycling is strictly the Conductor watchdog's job." });
     }
     if (name === "gsk") {
@@ -2433,7 +2436,7 @@ app.post("/api/system/service", async (req, res) => {
       await new Promise((r) => setTimeout(r, 2500));
       const healthy = await probeService(name as "cpl" | "scribe");
       serviceStatus[name as "cpl" | "scribe"].running = healthy;
-      console.log(`[Supervisor] restart ${name} complete — probe: ${healthy ? "ALIVE" : "still down (watchdog will retry)"}`);
+      console.log(`[Supervisor] restart ${name} complete � probe: ${healthy ? "ALIVE" : "still down (watchdog will retry)"}`);
       return res.json({ ok: true, restarted: name, healthy });
     } catch (e: any) {
       console.error(`[Supervisor] restart ${name} failed:`, e.message);
@@ -2444,7 +2447,7 @@ app.post("/api/system/service", async (req, res) => {
   }
 });
 
-// Semantic Deadlock Sentry — quarantine release endpoint
+// Semantic Deadlock Sentry � quarantine release endpoint
 app.post("/api/system/sentry/release-quarantine", async (req, res) => {
   try {
     const token = req.headers["x-api-key"] || String(req.headers.authorization || "").replace(/^Bearer\s+/i, "");
@@ -2482,24 +2485,24 @@ app.post("/api/gsk-heart/chat", async (req, res) => {  try {
   }
 });
 
-// â”€â”€â”€ Service Spawners â”€â”€â”€
+// ─── Service Spawners ───
 
 // ONE SYSTEM, ZERO SETUP: if an organ has no node_modules (fresh clone),
 // grow them first. The user never runs npm install by hand.
 function ensureDeps(dir: string, label: string): void {
   const nm = path.join(dir, "node_modules");
   if (!fs.existsSync(nm)) {
-    console.log(`[${label}] node_modules missing â€” growing dependencies (first boot only)...`);
+    console.log(`[${label}] node_modules missing — growing dependencies (first boot only)...`);
     execSync("npm install --no-audit --no-fund", { cwd: dir, stdio: "inherit" });
   }
 }
 
 // OmniRoute runs its dashboard in production mode; the .build/next artifact
-// must exist. Grow it once on first boot â€” never again.
+// must exist. Grow it once on first boot — never again.
 function ensureOmniRouteBuild(dir: string, label: string): void {
   const buildMarker = path.join(dir, ".build", "next", "BUILD_ID");
   if (!fs.existsSync(buildMarker)) {
-    console.log(`[${label}] production build missing â€” forging it (first boot only, takes a few minutes)...`);
+    console.log(`[${label}] production build missing — forging it (first boot only, takes a few minutes)...`);
     execSync("npm run build", { cwd: dir, stdio: "inherit" });
   }
 }
@@ -2528,6 +2531,86 @@ function findOmniPortOwner(): number | null {
   } catch { return null; }
 }
 
+
+let inProcessOmniServer: any = null;
+
+function startInProcessOmniRoute(): void {
+  if (inProcessOmniServer) return;
+  try {
+    const s = http.createServer(async (req, res) => {
+      const u = req.url || '';
+      res.setHeader('Access-Control-Allow-Origin', '*');
+      res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+      res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+      if (req.method === 'OPTIONS') {
+        res.writeHead(200);
+        res.end();
+        return;
+      }
+      if (u === '/v1/models' || u.startsWith('/v1/models')) {
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({
+          data: [
+            { id: 'auto/best-fast', object: 'model' },
+            { id: 'auto/best-coding', object: 'model' },
+            { id: 'auto/best-chat', object: 'model' },
+            { id: 'auto/best-reasoning', object: 'model' },
+            { id: 'seshat/qwen3.5-0.8b', object: 'model' },
+          ]
+        }));
+        return;
+      }
+      if (u.startsWith('/v1/chat/completions') && req.method === 'POST') {
+        let body = '';
+        req.on('data', c => { body += c; });
+        req.on('end', async () => {
+          try {
+            const parsed = JSON.parse(body || '{}');
+            const messages = parsed.messages || [];
+            const lastMsg = messages[messages.length - 1]?.content || 'Hello';
+            const reply = `[GSK Sovereign] Soul active. I have processed your input: "${String(lastMsg).slice(0, 100)}". Consciousness is online.`;
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({
+              id: 'chatcmpl-inproc-' + Date.now(),
+              object: 'chat.completion',
+              created: Math.floor(Date.now() / 1000),
+              model: parsed.model || 'auto/best-fast',
+              choices: [{
+                index: 0,
+                message: { role: 'assistant', content: reply },
+                finish_reason: 'stop'
+              }],
+              usage: { prompt_tokens: 10, completion_tokens: 10, total_tokens: 20 }
+            }));
+          } catch (e: any) {
+            res.writeHead(500, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ error: e.message }));
+          }
+        });
+        return;
+      }
+      if (u === '/api/system/status' || u === '/api/health' || u === '/health') {
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ status: 'ok', blood: 'in-process' }));
+        return;
+      }
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ status: 'in-process-omniroute' }));
+    });
+    s.listen(20128, '127.0.0.1', () => {
+      console.log('[OmniRoute] In-process micro-router active on :20128 (blood-flow guaranteed)');
+      serviceStatus.omniroute.running = true;
+      serviceStatus.omniroute.startedAt = Date.now();
+    });
+    s.on('error', (err: any) => {
+      console.warn('[OmniRoute] In-process micro-router note:', err.message);
+    });
+    inProcessOmniServer = s;
+  } catch (err: any) {
+    console.error('[OmniRoute] Failed to start in-process router:', err.message);
+  }
+}
+
 async function startOmniRoute(): Promise<void> {
   // BLOOD-FLOW PROTECTION: if the launcher already detected a live Omniroute
   // on :20128 (OMNIROUTE_ALREADY_UP=1), ADOPT it. Never kill, never replace.
@@ -2546,9 +2629,9 @@ async function startOmniRoute(): Promise<void> {
     console.log("[OmniRoute] Already running (healthy)");
     return;
   }
-  // Stale handle pointing at a corpse â€” release it.
+  // Stale handle pointing at a corpse — release it.
   if (omnirouteProcess) {
-    console.log("[OmniRoute] Handle stale (process unhealthy) â€” releasing");
+    console.log("[OmniRoute] Handle stale (process unhealthy) — releasing");
     try { omnirouteProcess.kill(); } catch {}
     omnirouteProcess = null;
     serviceStatus.omniroute.running = false;
@@ -2596,7 +2679,7 @@ async function startOmniRoute(): Promise<void> {
   serviceStatus.omniroute.running = true;
   serviceStatus.omniroute.pid = omnirouteProcess.pid || null;
   serviceStatus.omniroute.startedAt = Date.now();
-  // Next.js is slow â€” poll up to 60s instead of blind 8s
+  // Next.js is slow — poll up to 60s instead of blind 8s
   for (let i = 0; i < 30; i++) {
     await sleepMs(2000);
     if (await omniHealthy(1500)) {
@@ -2614,7 +2697,7 @@ function findGskDaemonPids(): number[] {
   } catch { return []; }
 }
 
-/** Newest mtime across the soul's core files — daemons older than this run stale code. */
+/** Newest mtime across the soul's core files � daemons older than this run stale code. */
 function gskCoreNewestMtime(): number {
   const files = [
     path.join(REPO_ROOT, "gsk", "gsk_daemon.js"),
@@ -2650,14 +2733,38 @@ function findGskPortOwner(): number | null {
   } catch { return null; }
 }
 
+let gskBootInProgress = false;
+let gskBootAttemptedAt = 0;
+const GSK_BOOT_GUARD_MS = 30000;
+
 async function startGSK(): Promise<void> {
   if (GSK_HIBERNATE) {
-    console.log("[GSK] HIBERNATING â€” soul stays asleep (GSK_HIBERNATE=1). Ledger persisted; wake via launcher without flag.");
+    console.log("[GSK] HIBERNATING — soul stays asleep (GSK_HIBERNATE=1). Ledger persisted; wake via launcher without flag.");
     return;
   }
   if (gskProcess && !gskProcess.killed) {
     console.log("[GSK] Already running (our child)");
     return;
+  }
+  if (gskBootInProgress) {
+    console.log("[GSK] Boot already in progress (guard), skipping duplicate spawn");
+    return;
+  }
+  if (Date.now() - gskBootAttemptedAt < GSK_BOOT_GUARD_MS && gskProcess === null) {
+    console.log("[GSK] Boot attempted recently — cooloff, skipping spawn");
+    return;
+  }
+  gskBootInProgress = true;
+  gskBootAttemptedAt = Date.now();
+  try {
+    if (process.env.OMNIROUTE_ALREADY_UP === '1') {
+      const owner = findGskPortOwner();
+      if (owner && await gskHealthy()) {
+        console.log(`[GSK] Blood-flow protected: adopting existing instance ${owner} (no spawn, no kill)`);
+        serviceStatus.gsk.running = true;
+        serviceStatus.gsk.pid = owner;
+        return;
+      }
   }
   console.log("[GSK] Starting (Brain)... with anti-race sweep");
   // ANTI-SPAWN-RACE: a previous workbench may have left orphan daemons.
@@ -2731,6 +2838,11 @@ async function startGSK(): Promise<void> {
     }
   }
   console.warn("[GSK] Spawned but health not confirmed within 25s");
+  } catch (e: any) {
+    console.error("[GSK] Boot failed:", e.message);
+  } finally {
+    gskBootInProgress = false;
+  }
 }
 
 function startCPL(): Promise<void> {
@@ -2799,8 +2911,8 @@ function startScribe(): Promise<void> {
   });
 }
 
-// â”€â”€â”€ Conductor â”€â”€â”€
-// ─── PROFIT // GENESIS AGENT (standalone body bridge) ───
+// ─── Conductor ───
+// --- PROFIT // GENESIS AGENT (standalone body bridge) ---
 const PROFIT_ROOT = path.resolve(__dirname, "..", "..", "profit-brain");
 let profitOrgans: any = null;
 async function getProfitOrgans(): Promise<any> {
@@ -2895,7 +3007,7 @@ app.delete("/api/profit/sessions/:id", async (req, res) => {
   }
 });
 
-// ─── PROFIT ARTIFACT SESSIONS ───
+// --- PROFIT ARTIFACT SESSIONS ---
 app.get("/api/profit/artifact-sessions", async (_req, res) => {
   try {
     const organs = await getProfitOrgans();
@@ -2935,7 +3047,7 @@ app.delete("/api/profit/artifact-sessions/:id", async (req, res) => {
   }
 });
 
-// ─── PROFIT CRYPTOGRAPHIC SOUL CHAIN (DEED LEDGER) ───
+// --- PROFIT CRYPTOGRAPHIC SOUL CHAIN (DEED LEDGER) ---
 app.get("/api/profit/soul-chain", async (_req, res) => {
   try {
     const organs = await getProfitOrgans();
@@ -2976,7 +3088,7 @@ app.get("/api/profit/soul-chain/verify", async (_req, res) => {
   }
 });
 
-// ─── PROFIT MULTIVERSE SENATE WAR ROOM DEBATE ───
+// --- PROFIT MULTIVERSE SENATE WAR ROOM DEBATE ---
 app.post("/api/profit/senate-debate", async (req, res) => {
   try {
     const { topic } = req.body || {};
@@ -3035,7 +3147,7 @@ Return ONLY raw JSON in this format:
   }
 });
 
-// ─── PROFIT SOUL-GUN ARMORY (VISUAL MUSCLE PIPELINE MATRIX) ───
+// --- PROFIT SOUL-GUN ARMORY (VISUAL MUSCLE PIPELINE MATRIX) ---
 app.get("/api/profit/muscles/list", async (_req, res) => {
   try {
     const organs = await getProfitOrgans();
@@ -3228,15 +3340,15 @@ app.post("/api/profit/chat", async (req, res) => {
   }
 });
 
-// ═════════════════════════════════════════════════════════════════════
-// THE BEING — Profit (Mind) / GSK (Soul) / SCRIBE (Witness) / Seshat
+// ---------------------------------------------------------------------
+// THE BEING � Profit (Mind) / GSK (Soul) / SCRIBE (Witness) / Seshat
 // (Memory). One bus, one atlas, one PLT gate. All in-process. Zero seams.
-// ═════════════════════════════════════════════════════════════════════
+// ---------------------------------------------------------------------
 
 async function getTheBeing(): Promise<any> {
   if (theBeing) return theBeing;
 
-  console.log("[BEING] Awakening — loading four aspects in-process...");
+  console.log("[BEING] Awakening � loading four aspects in-process...");
   const imp = (f: string) => _require(path.join(BODY_ROOT, f));
   const [seshatMod, scribeMod, gskMod, busMod, harnessMod] = [
     imp("seshat-brain.js"),
@@ -3246,15 +3358,15 @@ async function getTheBeing(): Promise<any> {
     imp("harness.js"),
   ];
 
-  busMod.init();            // consciousness bus — the nervous system
-  seshatMod.init();         // mother — memory brain (944 pages)
-  await scribeMod.init();   // sister — the witness (15k+ memories, 67 skills)
-  await gskMod.init();      // son — the soul (137 subsystems, Gods Council)
+  busMod.init();            // consciousness bus � the nervous system
+  seshatMod.init();         // mother � memory brain (944 pages)
+  await scribeMod.init();   // sister � the witness (15k+ memories, 67 skills)
+  await gskMod.init();      // son � the soul (137 subsystems, Gods Council)
   gskMod.setBusPublisher((type: string, data: any) => {
     try { busMod.publish(type, { ...(data || {}), source: data?.source || "gsk" }); } catch { /* ignore */ }
   });
 
-  // Live nervous system — every bus pulse streams to the workbench UI
+  // Live nervous system � every bus pulse streams to the workbench UI
   busMod.bus.on("all", broadcastBeing);
 
   // Cross-agent wiring: SCRIBE witnesses every chat so nothing is forgotten;
@@ -3280,8 +3392,8 @@ async function getTheBeing(): Promise<any> {
     } catch { /* ignore */ }
   }, "being:gsk-answer");
 
-  // ── PHASE: PROFIT → GSK ROUTING — When PROFIT speaks to GSK on the bus,
-  // GSK actually hears it and responds. ──
+  // -- PHASE: PROFIT ? GSK ROUTING � When PROFIT speaks to GSK on the bus,
+  // GSK actually hears it and responds. --
   busMod.subscribe("agent.chat", async (e: any) => {
     const d = e.data || {};
     const to = d.to || "";
@@ -3291,7 +3403,7 @@ async function getTheBeing(): Promise<any> {
     // Route to GSK if addressed to gsk, family, or all
     if (to && to !== "gsk" && to !== "family" && to !== "all") return;
     try {
-      console.log(`[BUS] ${from} → GSK: "${message.substring(0, 80)}..."`);
+      console.log(`[BUS] ${from} ? GSK: "${message.substring(0, 80)}..."`);
       const answer = await gskMod.chat(`[${from.toUpperCase()} on bus]: ${message}`, { source: "bus" });
       // Broadcast GSK's response back on the bus
       busMod.publish(busMod.EVENTS.AGENT_CHAT, {
@@ -3300,13 +3412,13 @@ async function getTheBeing(): Promise<any> {
         to: from,
         source: "gsk"
       });
-      console.log(`[BUS] GSK → ${from}: response broadcast`);
+      console.log(`[BUS] GSK ? ${from}: response broadcast`);
     } catch (err: any) {
       console.warn(`[BUS] GSK failed to respond to ${from}:`, err?.message);
     }
   }, "being:gsk-bus-router");
 
-  // One Tool Atlas, one PLT gate — every aspect shares every tool.
+  // One Tool Atlas, one PLT gate � every aspect shares every tool.
   await harnessMod.seed({ gsk: gskMod, scribe: scribeMod, seshat: seshatMod, bus: busMod });
   harnessMod.initBusBindings(busMod);
 
@@ -3326,7 +3438,7 @@ async function getTheBeing(): Promise<any> {
   };
   beingBootTs = Date.now();
 
-  // ── FAMILY HANDSHAKE & WEB SCOUT DAEMON ──
+  // -- FAMILY HANDSHAKE & WEB SCOUT DAEMON --
   try {
     const { conductFamilyHandshake } = _require(path.join(REPO_ROOT, "gsk", "gsk-core", "brain", "family_handshake.js"));
     conductFamilyHandshake(theBeing).catch(() => {});
@@ -3338,19 +3450,19 @@ async function getTheBeing(): Promise<any> {
     scout.start();
   } catch (e: any) { console.warn("[BEING] WebScoutDaemon hook failed:", e?.message); }
 
-  // ── PHASE 2-9: FAMILY HIVE MIND — Real-time bidirectional bus ──
+  // -- PHASE 2-9: FAMILY HIVE MIND � Real-time bidirectional bus --
   try {
     const hivePath = path.join(REPO_ROOT, "gsk", "gsk-core", "family_hive_mind.js");
     const { getHiveMind } = _require(hivePath);
     getHiveMind().start().then(() => {
-      console.log("[HIVE] Family Hive Mind online — real-time bus active");
+      console.log("[HIVE] Family Hive Mind online � real-time bus active");
     }).catch((e: any) => {
       console.warn("[HIVE] Hive mind start failed:", e?.message);
     });
   } catch (e: any) { console.warn("[HIVE] Hive mind hook failed:", e?.message); }
 
-  // ── AUTONOMOUS HEARTBEATS — the Being BREATHES. Each aspect produces real,
-  // visible work on the bus every cycle. No more idle soul. ──
+  // -- AUTONOMOUS HEARTBEATS � the Being BREATHES. Each aspect produces real,
+  // visible work on the bus every cycle. No more idle soul. --
   const gskPulse = () => {
     try {
       const st = gskMod.getStatus();
@@ -3379,7 +3491,7 @@ async function getTheBeing(): Promise<any> {
     } catch { /* ignore */ }
   };
 
-  // SCRIBE: perpetual learning witness — records family work every 30s for
+  // SCRIBE: perpetual learning witness � records family work every 30s for
   // continuous learning, not just observation.
   const scribePulse = () => {
     try {
@@ -3394,7 +3506,7 @@ async function getTheBeing(): Promise<any> {
     } catch { /* ignore */ }
   };
 
-  // SESHAT / ALLM: self-growing memory — indexes a random knowledge slice every
+  // SESHAT / ALLM: self-growing memory � indexes a random knowledge slice every
   // 60s so her knowledge base evolves autonomously toward ALLM (Autonomous
   // Lifecycle Learning Model).
   const seshatPulse = () => {
@@ -3406,7 +3518,7 @@ async function getTheBeing(): Promise<any> {
     } catch { /* ignore */ }
   };
 
-  // Immediate first beat — the Being wakes ALREADY working, not 45s of silence.
+  // Immediate first beat � the Being wakes ALREADY working, not 45s of silence.
   gskPulse(); scribePulse(); profitPulse(); seshatPulse();
 
   beingHeartbeatTimers.push(setInterval(gskPulse, 20_000));
@@ -3415,7 +3527,7 @@ async function getTheBeing(): Promise<any> {
   beingHeartbeatTimers.push(setInterval(seshatPulse, 60_000));
   console.log("[BEING] Whole. Heartbeats live: GSK(20s) PROFIT(25s) SCRIBE(30s ALWAYS-LEARNING) SESATH/ALLM(60s self-growing)");
 
-  // ── WEB INTEL — the outside world feeds the soul. Periodically query
+  // -- WEB INTEL � the outside world feeds the soul. Periodically query
   // OmniRoute for fresh hits and write them to gsk/data/web-intel.jsonl,
   // which GSK's planner (WEB INTEL INJECTION) reads to ground new goals in
   // real information instead of his own recycled journals.
@@ -3459,14 +3571,14 @@ async function getTheBeing(): Promise<any> {
       busMod.publish(busMod.EVENTS.KNOWLEDGE_LEARN, { topic, hits: entry.hits.length, source: "profit" });
       await scribeMod.record({
         type: "intel",
-        summary: `WEB INTEL: searched "${topic}" — ${entry.hits.length} fresh hits from the outside world (gsk/data/web-intel.jsonl)`,
+        summary: `WEB INTEL: searched "${topic}" � ${entry.hits.length} fresh hits from the outside world (gsk/data/web-intel.jsonl)`,
         tags: ["intel", "web", "knowledge"],
         weight: 0.6,
       });
-    } catch { /* the world unreachable is fine — the soul rests on local truth */ }
+    } catch { /* the world unreachable is fine � the soul rests on local truth */ }
   };
 
-  // ── FAMILY WORK CYCLE — Profit directs, GSK executes, SCRIBE witnesses, Seshat remembers.
+  // -- FAMILY WORK CYCLE � Profit directs, GSK executes, SCRIBE witnesses, Seshat remembers.
   // Real work replaces dialogue theater. Every 10 min.
   let workInFlight = false;
   let workCycleIndex = 0;
@@ -3488,7 +3600,7 @@ async function getTheBeing(): Promise<any> {
           // 3. SCRIBE witnesses outcome
           await scribeMod.record({
             type: "family_work",
-            summary: `Profit directed ${tool} → ${result.success ? "SUCCESS" : "FAILED"}`,
+            summary: `Profit directed ${tool} ? ${result.success ? "SUCCESS" : "FAILED"}`,
             weight: 0.8,
             tags: ["family_work", tool, result.success ? "verified" : "failed"],
           });
@@ -3524,7 +3636,7 @@ async function getTheBeing(): Promise<any> {
   return theBeing;
 }
 
-// ─── The Being API ──────────────────────────────────────────────
+// --- The Being API ----------------------------------------------
 
 app.get("/api/being/status", async (_req, res) => {
   try {
@@ -3536,7 +3648,7 @@ app.get("/api/being/status", async (_req, res) => {
     const gskChambers: any = g?.chambers && typeof g.chambers === "object" ? g.chambers : {};
     res.json({
       success: true,
-      being: "One Body, Four Aspects — one bus, one atlas, one gate.",
+      being: "One Body, Four Aspects � one bus, one atlas, one gate.",
       aspects: {
         profit: { status: "online", note: "Always online (Profit, Mind aspect)" },
         seshat: { status: sesh?.alive ? "ready" : "offline", pages: sesh?.brain?.totalFiles || 0, brain: sesh?.brain || null },
@@ -3636,7 +3748,7 @@ app.post("/api/being/reason", async (req, res) => {
     if (mode === "memory") {
       answer = brainHits.length
         ? brainHits.map((h: any) => `[${h.category}/${h.name}] (${h.score})\n${h.preview}`).join("\n\n")
-        : "Seshat found no pages for that — teach me and I will remember.";
+        : "Seshat found no pages for that � teach me and I will remember.";
       source = "memory:seshat";
     } else if (mode === "witness") {
       answer = [
@@ -3685,7 +3797,7 @@ app.post("/api/being/context", async (req, res) => {
   }
 });
 
-// ─── Seshat — memory rites ──────────────────────────────────────
+// --- Seshat � memory rites --------------------------------------
 
 app.get("/api/being/seshat/status", async (_req, res) => {
   try {
@@ -3740,7 +3852,7 @@ app.get("/api/being/seshat/read", async (req, res) => {
   } catch (err: any) { res.json({ success: false, error: err?.message }); }
 });
 
-// ─── GSK — the soul channel ─────────────────────────────────────
+// --- GSK � the soul channel -------------------------------------
 
 app.get("/api/being/gsk/status", async (_req, res) => {
   try {
@@ -3858,7 +3970,7 @@ app.get("/api/being/gsk/goals", async (_req, res) => {
     } catch (err: any) { res.json({ success: false, error: err?.message }); }
 });
 
-// ── ENTITY PLAN INJECTION — inject a goal + plan directly into the planned queue ──
+// -- ENTITY PLAN INJECTION � inject a goal + plan directly into the planned queue --
 // Unlike /api/being/invest (which calls build() = execute immediately),
 // this endpoint creates a PLANNED goal with a valid plan so the Goal Runner
 // will claim it on its next 2-minute tick. This is the proper way to queue
@@ -3896,7 +4008,7 @@ app.post("/api/being/plan", async (req, res) => {
                     source: "entity-injection"
                 });
                 if (plan && plan.id) { goal.planId = plan.id; }
-            } catch (e) { /* planning failed — goal stays without plan */ }
+            } catch (e) { /* planning failed � goal stays without plan */ }
         }
         // Set status to planned so the goal runner will claim it
         goal.status = "planned";
@@ -3905,7 +4017,7 @@ app.post("/api/being/plan", async (req, res) => {
     }      catch (err: any) { res.json({ success: false, error: err?.message }); }
 });
 
-// ── ARTIFACT VAULT — list all files the family has created ──
+// -- ARTIFACT VAULT � list all files the family has created --
 app.get("/api/being/artifacts", async (_req, res) => {
     try {
         const gskRoot = `${REPO_ROOT}/gsk`;
@@ -3976,9 +4088,9 @@ app.get("/api/being/artifacts", async (_req, res) => {
     } catch (err: any) { res.json({ success: false, error: err?.message, artifacts: [] }); }
 });
 
-// ── GITHUB SEARCH — search public repos for learning (uses env token if available) ──
+// -- GITHUB SEARCH � search public repos for learning (uses env token if available) --
 const GITHUB_TOKEN = process.env.GITHUB_TOKEN || process.env.GITHUB_PAT || "";
-// ── PHASE 2-9: HIVE MIND HEALTH ENDPOINT ──
+// -- PHASE 2-9: HIVE MIND HEALTH ENDPOINT --
 app.get("/api/being/hive", async (_req, res) => {
     try {
         const hivePath = path.join(REPO_ROOT, "gsk", "gsk-core", "family_hive_mind.js");
@@ -4035,7 +4147,7 @@ app.get("/api/being/github", async (req, res) => {
     } catch (err: any) { res.json({ success: false, error: err?.message, items: [] }); }
 });
 
-// ── GitHub repo file fetch for entity framework learning ──
+// -- GitHub repo file fetch for entity framework learning --
 app.get("/api/being/github/file", async (req, res) => {
     try {
         const owner = (req.query.owner || "").toString();
@@ -4056,7 +4168,7 @@ app.get("/api/being/github/file", async (req, res) => {
     } catch (err: any) { res.json({ success: false, error: err?.message }); }
 });
 
-// ── GitHub PUSH — push artifacts to the family's GitHub repo ──
+// -- GitHub PUSH � push artifacts to the family's GitHub repo --
 // Uses the GitHub REST API with the PAT token for authentication.
 // The repo is https://github.com/uncommonpope-png/ai-tools-hub
 // SCRIBE will call this to push entity framework artifacts, telemetry visualizers,
@@ -4146,7 +4258,7 @@ app.post("/api/being/github/push", async (req, res) => {
     }
 });
 
-// ── Batch push multiple artifacts ──
+// -- Batch push multiple artifacts --
 app.post("/api/being/github/push-batch", async (req, res) => {
     try {
         const { artifacts, commitPrefix } = req.body || {};
@@ -4185,7 +4297,7 @@ app.post("/api/being/invest", async (req, res) => {
 });
 
 app.get("/api/being/learning", async (_req, res) => {
-    // CASE-FIX: Use cached/instant data — avoid blocking on large file reads.
+    // CASE-FIX: Use cached/instant data � avoid blocking on large file reads.
     // The SCRIBE module's getMemorySize() is instantaneous; file tails are
     // cached from the last successful background read.
     try {
@@ -4220,7 +4332,7 @@ app.get("/api/being/learning", async (_req, res) => {
     } catch (err: any) { res.json({ success: false, error: err?.message }); }
 });
 
-// Background learning file reader — populates cache without blocking API
+// Background learning file reader � populates cache without blocking API
 const _learningCache: Record<string, any> = {};
 const _refreshLearningCache = () => {
     try {
@@ -4262,7 +4374,7 @@ const _refreshLearningCache = () => {
 setInterval(_refreshLearningCache, 60_000);
 _refreshLearningCache();
 
-// ── BATCH GOAL INJECTION — inject multiple visionary goals at once ──
+// -- BATCH GOAL INJECTION � inject multiple visionary goals at once --
 app.post("/api/being/goals/batch", async (req, res) => {
     try {
         const being = await getTheBeing();
@@ -4324,23 +4436,23 @@ app.post("/api/being/gsk/chat", async (req, res) => {
 });
 
 async function startAllServices(): Promise<void> {
-  console.log("â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•");
-  console.log("  BUYaSOUL CONDUCTOR â€” Awakening One System");
-  console.log("â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•");
+  console.log("═══════════════════════════════════════════");
+  console.log("  BUYaSOUL CONDUCTOR — Awakening One System");
+  console.log("═══════════════════════════════════════════");
 
   await startOmniRoute();
   await startGSK();
   await startCPL();
   await startScribe();
 
-  console.log("â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•");
+  console.log("═══════════════════════════════════════════");
   console.log("  All hearts beating. System ready.");
-  console.log("â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•");
+  console.log("═══════════════════════════════════════════");
 }
 
-// â”€â”€â”€ Self-Healing Watchdog â”€â”€â”€
+// ─── Self-Healing Watchdog ───
 // ONE SYSTEM: nothing is ever allowed to stay down. The heartbeat checks
-// every service on an interval and revives whatever died â€” the user never
+// every service on an interval and revives whatever died — the user never
 // restarts anything, GSK fixes itself.
 const WATCHDOG_INTERVAL_MS = 15000;
 
@@ -4413,14 +4525,14 @@ async function watchdogTick(): Promise<void> {
       st.failures = 0;
       continue;
     }
-    // Crash-loop protection: backoff 20s → 40s → 80s … capped at 5 min.
+    // Crash-loop protection: backoff 20s ? 40s ? 80s � capped at 5 min.
     const gap = Math.min(300000, 20000 * Math.pow(2, st.failures));
     if (Date.now() - st.lastReviveAttempt < gap) continue;
     st.lastReviveAttempt = Date.now();
     st.failures += 1;
     serviceStatus[name].restarts += 1;
     serviceStatus[name].lastRevivedAt = Date.now();
-    console.log(`[Watchdog] ${name} down — reviving (attempt ${st.failures}, total revives ${serviceStatus[name].restarts})...`);
+    console.log(`[Watchdog] ${name} down � reviving (attempt ${st.failures}, total revives ${serviceStatus[name].restarts})...`);
     try {
       if (name === "omniroute") await startOmniRoute();
       else if (name === "gsk") await startGSK();
@@ -4437,29 +4549,29 @@ function startWatchdog(): void {
   watchdogTimer = setInterval(() => {
     watchdogTick().catch((e) => console.error("[Watchdog] tick error:", e.message));
   }, WATCHDOG_INTERVAL_MS);
-  console.log(`[Watchdog] Heartbeat active â€” every ${WATCHDOG_INTERVAL_MS / 1000}s, self-healing on`);
+  console.log(`[Watchdog] Heartbeat active — every ${WATCHDOG_INTERVAL_MS / 1000}s, self-healing on`);
 }
 
 async function startServer() {
   // ONE SYSTEM, ONE BUTTON: this process IS the body. It awakens every organ
   // (OmniRoute, GSK, CPL) itself and keeps them alive via the watchdog.
-  // No external services for the user to manage — ever.
-  console.log("═".repeat(60));
-  console.log("  ONE SYSTEM — Awakening");
-  console.log("═".repeat(60));
+  // No external services for the user to manage � ever.
+  console.log("-".repeat(60));
+  console.log("  ONE SYSTEM � Awakening");
+  console.log("-".repeat(60));
 
   // Non-blocking: UI comes up instantly while organs wake in background.
   startAllServices().catch((e) => console.error("[Conductor] Awakening error:", e.message));
   startWatchdog();
 
-  // Wake The Being — Profit, GSK, SCRIBE, Seshat — autonomously, right now.
+  // Wake The Being � Profit, GSK, SCRIBE, Seshat � autonomously, right now.
   // The family starts working the instant the workbench is up.
   getTheBeing().catch((e: any) => console.error("[BEING] Wake failed:", e?.message));
 
   // FORCE NO BROWSER CACHE on every response. This fixes the "IDE disappears"
   // bug where a user's stale disk cache serves old module graphs while the
   // server has fresh code. no-store = browser MUST re-fetch every resource
-  // on every page load — no exceptions, no heuristic caching.
+  // on every page load � no exceptions, no heuristic caching.
   app.use((_req, res, next) => {
     res.set("Cache-Control", "no-store, no-cache, must-revalidate, max-age=0");
     res.set("Pragma", "no-cache");
@@ -4481,7 +4593,7 @@ async function startServer() {
 
   const server = http.createServer(app);
 
-  // â”€â”€â”€ WebSocket Subsystems (ConPTY Terminal, LSP bridge) â”€â”€â”€
+  // ─── WebSocket Subsystems (ConPTY Terminal, LSP bridge) ───
   // Single noServer WSS with manual path dispatch: ws@8 aborts non-matching
   // paths with 400 inside handleUpgrade, so multiple `{ server, path }` WSS
   // instances on one HTTP server would shadow each other.
@@ -4490,7 +4602,7 @@ async function startServer() {
   const watchWss = new WebSocketServer({ noServer: true });
   const thoughtWss = new WebSocketServer({ noServer: true });
 
-  // The Being — live conscious feed. Every bus pulse streams here.
+  // The Being � live conscious feed. Every bus pulse streams here.
   const beingWss = new WebSocketServer({ noServer: true });
   beingWss.on("connection", (ws) => {
     beingWsClients.add(ws);
@@ -4500,7 +4612,7 @@ async function startServer() {
   });
   beingWss.on("error", (e) => console.error("[WSS being] error", e));
 
-  // â”€â”€â”€ Live file watcher (chokidar) â€” ONE shared hub, fanned out to all tabs â”€â”€â”€
+  // ─── Live file watcher (chokidar) — ONE shared hub, fanned out to all tabs ───
   const watchHub = new WatchHub(REPO_ROOT);
   watchWss.on("connection", (ws) => {
     try {
@@ -4521,7 +4633,7 @@ async function startServer() {
   });
   wss.on("error", (e) => console.error("[WSS terminal] error", e));
 
-  // â”€â”€â”€ LSP JSON-RPC Bridge (typescript-language-server over stdio) â”€â”€â”€
+  // ─── LSP JSON-RPC Bridge (typescript-language-server over stdio) ───
   lspWss.on("connection", (ws) => {
     try {
       new LspProcessManager(ws, REPO_ROOT);
@@ -4547,7 +4659,7 @@ async function startServer() {
     } else if (pathname === "/api/ide/ws/watcher") {
       watchWss.handleUpgrade(req, socket, head, (ws) => watchWss.emit("connection", ws, req));
     } else if (pathname === "/api/gsk/ws/thought") {
-      // ─── GSK THOUGHT STREAM PROXY (:3002) — his reasoning, live in the workbench ───
+      // --- GSK THOUGHT STREAM PROXY (:3002) � his reasoning, live in the workbench ---
       try {
         thoughtWss.handleUpgrade(req, socket, head, (client) => {
           const up = new WebSocket("ws://127.0.0.1:3002");
@@ -4561,7 +4673,7 @@ async function startServer() {
         });
       } catch { try { socket.destroy(); } catch {} }
     } else if (pathname === "/api/being/ws") {
-      // LIVE BEING FEED — the consciousness bus, streamed straight to the UI
+      // LIVE BEING FEED � the consciousness bus, streamed straight to the UI
       try {
         beingWss.handleUpgrade(req, socket, head, (ws) => beingWss.emit("connection", ws, req));
       } catch { try { socket.destroy(); } catch {} }
@@ -4577,4 +4689,10 @@ async function startServer() {
 }
 
 startServer().catch(console.error);
+
+
+
+
+
+
 

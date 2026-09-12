@@ -38,10 +38,15 @@ class WebScoutDaemon {
             if (results && results.length > 0) {
                 const summaryText = results.map(r => `• ${r.title}: ${r.snippet || r.content?.slice(0, 150)} (${r.url})`).join('\n');
                 
-                // 1. Store in web-intel.jsonl
+                // 1. Store in web-intel.jsonl (P3.22: rotate — cap 500 entries so the
+                // file never grows unbounded; readers only use the tail)
                 const intelPath = path.join(__dirname, '../../data/web-intel.jsonl');
                 const entry = JSON.stringify({ timestamp: new Date().toISOString(), topic, resultsCount: results.length, summary: summaryText }) + '\n';
                 fs.appendFileSync(intelPath, entry, 'utf-8');
+                try {
+                    const lines = fs.readFileSync(intelPath, 'utf-8').split('\n').filter(Boolean);
+                    if (lines.length > 500) fs.writeFileSync(intelPath, lines.slice(-500).join('\n') + '\n', 'utf-8');
+                } catch {}
 
                 // 2. Feed SCRIBE
                 if (this.being?.scribe?.record) {
@@ -80,7 +85,7 @@ class WebScoutDaemon {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
-                    'Authorization': 'Bearer test',
+                    'Authorization': `Bearer ${process.env.NINE_ROUTER_API_KEY || 'test'}`,
                     'Content-Length': Buffer.byteLength(body)
                 },
                 timeout: 10000

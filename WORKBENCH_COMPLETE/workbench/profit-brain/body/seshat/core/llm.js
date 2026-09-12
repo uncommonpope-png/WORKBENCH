@@ -9,8 +9,9 @@ const { spawn } = require('child_process');
 const pathModule = require('path');
 const fs = require('fs');
 
-const LLAMA_BIN = pathModule.join(__dirname, '..', '..', '..', '..', '.transformers-cache', 'llama', 'llama-cli.exe');
-const MODEL_PATH = pathModule.join(__dirname, '..', '..', '..', '..', '.transformers-cache', 'qwen3.5-0.8b-q4_0.gguf');
+const RUNTIME_DIR = process.env.SESHA_RUNTIME_DIR || pathModule.join(__dirname, '..', '..', '..', '..', '.transformers-cache');
+const LLAMA_BIN = pathModule.join(RUNTIME_DIR, 'llama', 'llama-cli.exe');
+const MODEL_PATH = pathModule.join(RUNTIME_DIR, 'qwen3.5-0.8b-q4_0.gguf');
 
 let llmReady = false;
 

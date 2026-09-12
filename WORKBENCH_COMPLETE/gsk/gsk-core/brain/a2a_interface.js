@@ -15,7 +15,7 @@ const crypto = require('crypto');
 class A2AInterface {
     constructor(kernel, options = {}) {
         this.kernel = kernel;
-        this.omniRouteUrl = options.omniRouteUrl || 'http://localhost:20128';
+        this.omniRouteUrl = options.omniRouteUrl || process.env.OMNIROUTE_URL || process.env.NINE_ROUTER_URL || 'http://localhost:20128';
         this.port = options.port || 4492; // GSK A2A endpoint
         this.skillId = options.skillId || 'gsk-brain';
         this.tasks = new Map(); // taskId -> task state
@@ -208,34 +208,19 @@ class A2AInterface {
      * Register GSK as A2A skill on OmniRoute
      */
     async _registerWithOmniRoute() {
+        // OmniRoute's A2A skills are built-in server modules (no runtime
+        // registration API), so a POST to /api/a2a/skills/register is dead.
+        // GSK advertises itself via its own /.well-known/agent.json on the
+        // A2A port; OmniRoute agents discover it through the agent card.
         try {
-            const skillDef = {
-                name: this.skillId,
-                description: 'GSK Brain - Autonomous digital being with consciousness, planning, and execution',
-                inputSchema: {
-                    type: 'object',
-                    properties: {
-                        goal: { type: 'string', description: 'Goal for GSK to execute' },
-                        projectRoot: { type: 'string', description: 'Project root path' },
-                        options: { type: 'object', description: 'Execution options' }
-                    },
-                    required: ['goal']
-                },
-                endpoint: `http://localhost:${this.port}`,
-                capabilities: ['autonomy', 'planning', 'coding', 'research', 'review', 'architecture']
-            };
-
-            const response = await fetch(`${this.omniRouteUrl}/api/a2a/skills/register`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(skillDef)
-            });
-
-            if (response.ok) {
-                console.log('[A2AInterface] ✓ Registered with OmniRoute as A2A skill');
-            }
+            const probe = await fetch(`${this.omniRouteUrl}/api/a2a/status`, {
+                method: 'GET',
+                signal: AbortSignal.timeout(3000)
+            }).catch(() => null);
+            const present = probe && probe.ok;
+            console.log(`[A2AInterface] OmniRoute A2A ${present ? 'reachable' : 'offline'} — GSK advertises on :${this.port}/.well-known/agent.json`);
         } catch (e) {
-            console.log('[A2AInterface] Could not register with OmniRoute (may be offline):', e.message);
+            console.log('[A2AInterface] OmniRoute A2A check failed:', e.message);
         }
     }
 

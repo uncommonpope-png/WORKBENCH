@@ -26,17 +26,17 @@ process.env.GSK_CREATIVE_AUTONOMY = process.env.GSK_CREATIVE_AUTONOMY || '1'; //
 // THE HEART (backgroundBrain): autonomous mind on the same OmniRoute gateway —
 // unified so the Heart gets the same budget guards, caching, and fallbacks as
 // the Brain. If a provider behind the gateway times out, nothing blocks either.
-process.env.GSK_BRAIN_ROUTER_URL = process.env.GSK_BRAIN_ROUTER_URL || 'http://127.0.0.1:20128';
+process.env.GSK_BRAIN_ROUTER_URL = process.env.GSK_BRAIN_ROUTER_URL || process.env.NINE_ROUTER_URL;
 process.env.GSK_BRAIN_API_KEY = process.env.GSK_BRAIN_API_KEY || process.env.NINE_ROUTER_API_KEY;
 process.env.GSK_BRAIN_MODEL = process.env.GSK_BRAIN_MODEL || 'auto/best-reasoning';
 process.env.GSK_BRAIN_FALLBACKS = process.env.GSK_BRAIN_FALLBACKS || 'auto/best-fast,auto/best-coding,auto/smart';
 process.env.GSK_BRAIN_TIMEOUT_S = process.env.GSK_BRAIN_TIMEOUT_S || '600';
-process.env.GSK_HEART_ROUTER_URL = process.env.GSK_HEART_ROUTER_URL || 'http://127.0.0.1:20128'; // unified via OmniRoute gateway
+process.env.GSK_HEART_ROUTER_URL = process.env.GSK_HEART_ROUTER_URL || process.env.NINE_ROUTER_URL; // unified via OmniRoute gateway
 process.env.GSK_HEART_API_KEY = process.env.GSK_HEART_API_KEY || process.env.NINE_ROUTER_API_KEY;
 process.env.GSK_HEART_MODEL = process.env.GSK_HEART_MODEL || 'auto/best-fast';
 process.env.GSK_HEART_FALLBACKS = process.env.GSK_HEART_FALLBACKS || 'auto/best-chat,auto/best-reasoning,auto/best-coding';
 process.env.GSK_HEART_TIMEOUT_S = process.env.GSK_HEART_TIMEOUT_S || '300';
-process.env.GSK_HEART_COOLDOWN_MS = process.env.GSK_HEART_COOLDOWN_MS || '15000';
+process.env.GSK_HEART_COOLDOWN_MS = process.env.GSK_HEART_COOLDOWN_MS || '30000';
 
 // ── SLOW THE HEART — give the Brain room to move ───────────────────────
 // Perpetual consciousness (the Heart's main ticker) — 45min to prevent router flooding.

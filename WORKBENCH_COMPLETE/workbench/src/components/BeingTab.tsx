@@ -239,8 +239,8 @@ export function BeingTab({ accentColor }: { accentColor: string }) {
     fetchAtlas();
     const interval = setInterval(() => {
       fetchStatus();
-      fetchBusLog();
-    }, 5000);
+      // busLog now push-only via WS live — no poll
+    }, 15000);
     return () => clearInterval(interval);
   }, [fetchStatus, fetchBusLog, fetchAtlas]);
 

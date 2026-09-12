@@ -111,6 +111,9 @@ Key execution questions:
 Write in first person. Be direct, technical, and concrete. Strictly NO poetic fluff, vague existential questions ("Am I real?"), or filler.`;
 
         try {
+            // P3.24: shared background budget — day spent → local fallback, no router flood.
+            const { globalBudget } = require('./llm_budget.js');
+            if (!globalBudget.trySpend('autoJournal')) return this._fallbackThoughts();
             const raw = await this.kernel.brain.think(prompt, this._getSoulContext());
             let text = typeof raw === 'string' ? raw : (raw?.text || raw?.content || raw?.response || '');
             if (!text || typeof text !== 'string' || text.trim().length === 0) { text = this._fallbackThoughts(); }

@@ -53,6 +53,10 @@ class SystemPromptCompiler {
         parts.push(this._buildJournalSection());
         parts.push(this._buildRelationshipsSection());
         parts.push(this._buildChamberSection());
+        // P4e: symbolic/narrative/scribe-bridge layer was built but never added
+        // to the prompt. Returns '' when nothing is wired, so this is a no-op
+        // until those systems exist.
+        parts.push(this._buildSymbolicSection());
 
         // Layer 12.5: Profit Bible (PLT doctrine, Gods, Covenant)
         parts.push(this._buildBibleSection());

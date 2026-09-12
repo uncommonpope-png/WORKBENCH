@@ -129,7 +129,7 @@ export const IdeTab: React.FC<IdeTabProps> = ({ accentColor }) => {
   const [zenMode, setZenMode] = useState(false);
   const [keybindingsOn, setKeybindingsOn] = useState(false);
   const [bookmarks, setBookmarks] = useState<Record<string, number[]>>({});
-  const [usePty, setUsePty] = useState(false);
+  const [usePty, setUsePty] = useState(true);
   const [useDock, setUseDock] = useState<boolean>(() => (localStorage.getItem("forge_dock") ?? "dock") === "dock");
   const toggleDock = () => setUseDock((v) => { localStorage.setItem("forge_dock", v ? "classic" : "dock"); return !v; });
 
@@ -325,6 +325,49 @@ export const IdeTab: React.FC<IdeTabProps> = ({ accentColor }) => {
     connect();
     return () => { closed = true; if (refreshTimer) window.clearTimeout(refreshTimer); ws?.close(); };
   }, []);
+
+  // ── GHOST CURSOR — Family hands visible in the IDE (Porsche hood off)
+  const [ghost, setGhost] = useState<{ actor: string; path: string; line: number; tool?: string; ts: number } | null>(null);
+  const ghostDecorRef = useRef<string[]>([]);
+  useEffect(() => {
+    let ws: WebSocket | null = null;
+    let closed = false;
+    let fadeTimer: number | undefined;
+    const connect = () => {
+      if (closed) return;
+      try { ws = new WebSocket(`${window.location.protocol === "https:" ? "wss" : "ws"}://${window.location.host}/api/being/ws`); } catch { setTimeout(connect, 4000); return; }
+      ws.onmessage = (ev) => {
+        try {
+          const f = JSON.parse(ev.data);
+          if (f.type !== "ide.cursor" && f.type !== "ide.edit") return;
+          const d = f.data || {};
+          const actor = String(d.actor || f.source || "gsk");
+          const path = String(d.path || "");
+          const tool = String(d.tool || d.action || "");
+          const line = Number(d.line || 1);
+          setGhost({ actor, path, line, tool, ts: f.ts || Date.now() });
+          if (fadeTimer) window.clearTimeout(fadeTimer);
+          fadeTimer = window.setTimeout(() => setGhost(null), 8000) as unknown as number;
+        } catch {}
+      };
+      ws.onclose = () => { if (!closed) setTimeout(connect, 3000); };
+      ws.onerror = () => {};
+    };
+    connect();
+    return () => { closed = true; if (fadeTimer) window.clearTimeout(fadeTimer); ws?.close(); };
+  }, []);
+  // Apply Monaco ghost line decoration when ghost matches active file
+  useEffect(() => {
+    if (!edRef.current || !ghost || !activePath) return;
+    const mon = (window as any).monaco;
+    if (!mon) return;
+    const norm = (p: string) => p.replace(/\//g, "\\").toLowerCase();
+    if (ghost.path && !norm(activePath).endsWith(norm(ghost.path).split("\\").pop() || "")) return;
+    const line = Math.max(1, ghost.line || 1);
+    ghostDecorRef.current = edRef.current.deltaDecorations(ghostDecorRef.current, [
+      { range: new mon.Range(line, 1, line, 1), options: { isWholeLine: true, className: ghost.actor === "gsk" ? "ghost-gsk-line" : ghost.actor === "profit" ? "ghost-profit-line" : "ghost-seshat-line", glyphMarginClassName: "ghost-glyph", overviewRuler: { color: ghost.actor === "gsk" ? "#F59E0B" : ghost.actor === "profit" ? "#ec4899" : "#8B5CF6", position: 4 } } },
+    ]);
+  }, [ghost, activePath]);
 
   const toggleBookmark = () => {
     if (!edRef.current || !activePath) return;

@@ -33,16 +33,32 @@ class MCPManager {
     }
 
     loadConfig() {
+        let count = 0;
         if (fs.existsSync(this.configPath)) {
             const raw = fs.readFileSync(this.configPath, 'utf8');
             const config = JSON.parse(raw);
             this.servers = config.servers || {};
-            const count = Object.keys(this.servers).length;
+            count = Object.keys(this.servers).length;
             console.log(`[MCP_MANAGER] Loaded ${count} integration definitions from config`);
-            return count;
+        } else {
+            console.warn('[MCP_MANAGER] No mcp_config.json found at', this.configPath);
         }
-        console.warn('[MCP_MANAGER] No mcp_config.json found at', this.configPath);
-        return 0;
+
+        // NINE: OmniRoute is the family blood flow — always wire it as GSK's
+        // MCP subsystem so the being can access and use the MCP server without
+        // a hand-written config. Disable with GSK_OMNIROUTE_MCP=off.
+        if (process.env.GSK_OMNIROUTE_MCP !== 'off' && !this.servers.omniroute) {
+            this.servers.omniroute = {
+                type: 'http',
+                transport: 'streamable-http',
+                url: (process.env.OMNIROUTE_URL || process.env.NINE_ROUTER_URL || 'http://127.0.0.1:20128') + '/api/mcp/stream',
+                apiKey: process.env.OMNIROUTE_API_KEY || process.env.GSK_BRAIN_API_KEY || process.env.NINE_ROUTER_API_KEY || process.env.GSK_MCP_OMNIROUTE_KEY || '',
+                autoConnect: true
+            };
+            console.log('[MCP_MANAGER] Using OmniRoute as default MCP subsystem (' + this.servers.omniroute.url + ')');
+            count++;
+        }
+        return count;
     }
 
     async connect(serverName) {
@@ -140,24 +156,26 @@ class MCPManager {
             const affinity = this._getPLTAffinity(serverName, tool);
             
             try {
-                this.kernelSkills.registerExternalSkill(skillName, {
-                    name: skillName,
-                    description: `[MCP] ${description}`,
-                    pl_affinity: affinity,
-                    handler: async (input) => {
-                        this.stats.toolCalls++;
-                        try {
-                            const args = this._mapInputToArgs(tool, input);
-                            const result = await this.client.callTool(tool.name, args);
-                            this.stats.lastToolCall = Date.now();
-                            return result;
-                        } catch (e) {
-                            this.stats.toolErrors++;
-                            throw e;
+                if (typeof this.kernelSkills.registerExternalSkill === 'function') {
+                    this.kernelSkills.registerExternalSkill(skillName, {
+                        name: skillName,
+                        description: `[MCP] ${description}`,
+                        pl_affinity: affinity,
+                        handler: async (input) => {
+                            this.stats.toolCalls++;
+                            try {
+                                const args = this._mapInputToArgs(tool, input);
+                                const result = await this.client.callTool(tool.name, args);
+                                this.stats.lastToolCall = Date.now();
+                                return result;
+                            } catch (e) {
+                                this.stats.toolErrors++;
+                                throw e;
+                            }
                         }
-                    }
-                });
-                registered++;
+                    });
+                    registered++;
+                }
             } catch (e) {
             }
         }

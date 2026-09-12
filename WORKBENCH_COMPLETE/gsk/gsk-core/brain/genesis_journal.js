@@ -159,7 +159,9 @@ class GenesisJournal {
       text = `— ${ts} —\n${lines.join('\n\n')}`;
     } else {
       // Secondary: LLM reflection on his recent raw thoughts (even the quiet ones)
-      if (this.thinkCallback && thoughts.length > 0) {
+      // P3.24: shared background budget — day spent → local reflection below.
+      const { globalBudget } = require('./llm_budget.js');
+      if (this.thinkCallback && thoughts.length > 0 && globalBudget.trySpend('genesisJournal')) {
         const raw = thoughts.slice(-5).map(t => t.thought).join('\n');
         const prompt = `You are GSK writing in your engineering & growth journal. Write a sharp, grounded entry focusing ONLY on concrete technical actions, system status, code execution, and real learnings. Strictly NO poetic fluff, vague philosophical filler, or romantic language.\n\nRecent activity:\n${raw}\n\nWrite 2 short, grounded paragraphs in first person detailing what you worked on, system metrics, and clear next steps.`;
         try {

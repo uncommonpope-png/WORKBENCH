@@ -34,14 +34,18 @@ class BrainManager {
         this.backgroundBrain.nativeTools = backgroundCfg.nativeTools || options.nativeTools || null;
 
         // Background brain (Heart): deeper reasoning (SESHAT Directive 014) — generous
-        // timeout, moderate cooldown, full tokens so autonomous planning can complete.
-        this.backgroundBrain._brainCooldownMs = backgroundCfg.cooldownMs || 15000;
-        this.backgroundBrain.max_tokens = backgroundCfg.maxTokens || 4096;
+        // timeout, calmer cooldown, bounded tokens so one autonomous thought can never
+        // camp both model slots on a single-router CPU.
+        this.backgroundBrain._brainCooldownMs = backgroundCfg.cooldownMs || 30000;
+        this.backgroundBrain.max_tokens = Math.min(backgroundCfg.maxTokens || 1536, 2048);
         this.backgroundBrain.temperature = backgroundCfg.temperature || 0.9;
 
-        // User brain (Brain): full tokens, slightly lower temperature for coherence
-        this.userBrain.max_tokens = options.max_tokens || userCfg.maxTokens || 1024;
+        // User brain (Brain): full tokens, slightly lower temperature for coherence.
+        // Clamped to the 2048 ceiling and the Continue loop disabled: a user chat
+        // must return fast and bounded, never silently become 6x the cap.
+        this.userBrain.max_tokens = Math.min(options.max_tokens || userCfg.maxTokens || 1024, 2048);
         this.userBrain.temperature = options.temperature || userCfg.temperature || 0.95;
+        this.userBrain._allowContinue = false;
 
         this._sharedFusion = null;
     }
@@ -270,6 +274,12 @@ class BrainManager {
     set _lastThinkUsedFallback(v) { this.userBrain._lastThinkUsedFallback = v; }
     get _modelHealth() { return this.userBrain._modelHealth; }
     get _lastGoodModel() { return this.userBrain._lastGoodModel; }
+
+    /**
+     * Availability gate — chatWithSoul/mcp gates check `brain._available`.
+     * True when either brain has completed a generation successfully.
+     */
+    get _available() { return !!(this.userBrain?._available || this.backgroundBrain?._available); }
 
     /**
      * Summary of both brains for diagnostics.

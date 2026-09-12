@@ -24,13 +24,20 @@ function shouldUseInprocCanary() {
 }
 
 async function callExternalOmniRoute(payload, opts = {}) {
-  const OMNIROUTE_URL = process.env.OMNIROUTE_URL || 'http://127.0.0.1:20128';
+  const OMNIROUTE_URL = process.env.OMNIROUTE_URL || process.env.NINE_ROUTER_URL || 'http://127.0.0.1:20128';
+  const apiKey = process.env.OMNIROUTE_API_KEY || process.env.GSK_BRAIN_API_KEY || process.env.NINE_ROUTER_API_KEY || '';
+  const controller = new AbortController();
+  const timeoutMs = opts.timeoutMs || 30000;
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
   try {
     const res = await fetch(`${OMNIROUTE_URL}/v1/chat/completions`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        ...(apiKey ? { 'Authorization': 'Bearer ' + apiKey } : {})
+      },
       body: JSON.stringify(payload),
-      timeout: opts.timeoutMs || 30000
+      signal: controller.signal
     });
     const data = await res.json().catch(() => null);
     const now = Date.now();
@@ -43,8 +50,10 @@ async function callExternalOmniRoute(payload, opts = {}) {
     };
     // If the external service returns timing info, attach it
     if (data && data.__meta && data.__meta.latency) provenance.latency = data.__meta.latency;
+    clearTimeout(timer);
     return { ...(data || {}), __provenance: provenance };
   } catch (e) {
+    clearTimeout(timer);
     throw new Error(`omniroute-adapter: external call failed: ${e && e.message}`);
   }
 }

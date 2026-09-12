@@ -43,6 +43,15 @@ class SkillCompiler {
 
       if (topics.length < 2) return;
 
+      // P3.24: shared background budget — day spent → skip, no file, no LLM.
+      try {
+        const { globalBudget } = require('./llm_budget.js');
+        if (!globalBudget.trySpend('skillCompiler')) {
+          console.log('[SkillCompiler] Skipping — background LLM budget spent for today');
+          return;
+        }
+      } catch {}
+
       const prompt = `You are GSK, building a skill from what you've learned.\n\nTopics explored recently:\n${topics.map(t => `- ${t}`).join('\n')}\n\nCreate a Node.js skill module at ${this.skillsDir}/auto_${Date.now()}.js that encapsulates what you learned. Return ONLY the JavaScript code, no explanation, no tool-call JSON, no markdown fences. The module should export a function named 'execute' that takes an input param and returns a string.`;
 
       const code = await this.thinkCallback(prompt);
@@ -128,12 +137,39 @@ class SkillCompiler {
         return;
       }
 
+      // P3.20: syntax gate — compile without executing. Unloadable code is
+      // deleted, never written (this is where the 250-file corrupt pile came from).
+      try {
+        new (require('vm').Script)(cleanCode, { filename: `skill_${Date.now()}.js` });
+      } catch (e) {
+        console.log('[SkillCompiler] Rejecting unloadable skill code:', e.message);
+        return;
+      }
+
       // Normalize any hallucinated paths inside the code
       cleanCode = cleanCode.replace(/C:\\Users\\(?:Craig|craig|craigh)\\/gi, `C:\\Users\\${path.basename(require('os').homedir())}\\`);
       cleanCode = cleanCode.replace(/C:\\GSK\\/gi, process.env.GSK_ROOT || path.join(__dirname, '..'));
 
       fs.writeFileSync(filepath, cleanCode);
       console.log(`[SkillCompiler] Created skill: ${filename}`);
+      // P3.20: manifest — every compiled skill recorded with hash + time so a
+      // future loader (or an auditor) can tell loaded from dead without walking.
+      try {
+        const manifestPath = path.join(this.skillsDir, '..', '..', 'data', 'compiled-skills.json');
+        let manifest = [];
+        try { manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8')) || []; } catch {}
+        const crypto = require('crypto');
+        manifest.push({
+          file: filename,
+          sha256: crypto.createHash('sha256').update(cleanCode).digest('hex').slice(0, 16),
+          bytes: cleanCode.length,
+          at: new Date().toISOString(),
+          loaded: false,
+        });
+        fs.writeFileSync(manifestPath, JSON.stringify(manifest.slice(-500), null, 2));
+      } catch (e) {
+        console.log('[SkillCompiler] Manifest write skipped:', e.message);
+      }
     } catch (e) {
       console.log(`[SkillCompiler] Error: ${e.message}`);
     }

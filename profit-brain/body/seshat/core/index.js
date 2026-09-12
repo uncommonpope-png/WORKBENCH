@@ -12,7 +12,7 @@ const { indexBrain, updateIndex, categorizeFile, parseMarkdownMeta } = require('
 const { initLLM, generate, think, synthesize, summarize, getStatus: getLLMStatus, LLM_AVAILABLE } = require('./llm');
 const broker = require('./broker');
 const { checkOmniRoute, omniStatus } = require('./omniClient');
-const { record, recall, init: initScribe } = require('../../profit-brain/body/scribe-module');
+const { record, recall, init: initScribe } = require('../../scribe-module');
 
 let scribeInitialized = false;
 

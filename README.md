@@ -37,6 +37,9 @@ pipeline_tag: other
 *No browser. No `npm install`. No setup. Just profit, love, tax.*
 
 </div>
+  
+> [!IMPORTANT]
+> **DO NOT** run root `server.ts` directly. To start the system, run `node launch-family.cjs` from the repository root, or build and run the Desktop EXE from `WORKBENCH_COMPLETE/workbench/dist`.
 
 ---
 

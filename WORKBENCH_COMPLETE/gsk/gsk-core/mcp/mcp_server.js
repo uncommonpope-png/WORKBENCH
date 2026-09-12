@@ -64,6 +64,19 @@ class MCPServer {
             }
         };
 
+        // SEED the registry with the server's own key (developer tier) so
+        // /mcp/execute works out-of-the-box instead of 401ing on every fresh
+        // install (previously the registry was never populated).
+        if (this.apiKey) {
+            this._apiKeys[this.apiKey] = {
+                tier: 'developer',
+                ...(this._tiers.developer || {}),
+                revoked: false,
+                rateLimitLast: 0,
+                usage: { totalCalls: 0, endpoints: {}, thisMonth: 0, monthReset: Date.now() },
+            };
+        }
+
         // Kernel system references
         this.brain = kernelSystems.brain || null;
         this.memory = kernelSystems.memory || null;
@@ -361,7 +374,7 @@ class MCPServer {
         const { method, params, id } = body;
 
         // API key check for gateway tier enforcement
-        const authHeader = req.headers.authorization || req.headers.Authorization;
+        const authHeader = req.headers.authorization || req.headers.Authorization || req.headers['x-api-key'];
         const keyCheck = this._checkApiKey(authHeader);
         if (!keyCheck.valid) {
             this._sendJSONRPCError(res, 401, -32001, keyCheck.reason, id);
@@ -1650,6 +1663,10 @@ class MCPServer {
 
         switch (action) {
             case 'search':
+                // P4e: prefer the real concept index over the legacy stubs.
+                if (typeof this.knowledgeGraph.findConcepts === 'function') {
+                    return await this.knowledgeGraph.findConcepts(params.query);
+                }
                 if (typeof this.knowledgeGraph.search === 'function') {
                     return await this.knowledgeGraph.search(params.query);
                 }
@@ -2009,13 +2026,11 @@ class MCPServer {
             systems: {},
         };
 
-        // Brain status
+        // Brain status (P2.15: dead provider flags removed — _available is the
+        // only real gate; mega_brain never sets groq/gemini/local flags)
         if (this.brain) {
             status.systems.brain = {
-                available: this.brain._groq_available || this.brain._gemini_available || this.brain._local_available,
-                groq: this.brain._groq_available || false,
-                gemini: this.brain._gemini_available || false,
-                local: this.brain._local_available || false,
+                available: !!this.brain._available,
                 model: this.brain.model || 'unknown',
             };
         } else {
@@ -2178,6 +2193,7 @@ class MCPServer {
     _incrementUsage(key, endpoint) {
         const tier = this._apiKeys[key];
         if (!tier || !tier.usageTracking) return;
+        const now = Date.now();
         tier.usage.totalCalls++;
         tier.usage.endpoints[endpoint] = (tier.usage.endpoints[endpoint] || 0) + 1;
         // Monthly reset
@@ -2232,9 +2248,7 @@ class MCPServer {
             case 'brain':
                 return {
                     module: 'brain',
-                    groq: this.brain ? this.brain._groq_available : false,
-                    gemini: this.brain ? this.brain._gemini_available : false,
-                    local: this.brain ? this.brain._local_available : false,
+                    available: this.brain ? !!this.brain._available : false,
                     model: this.brain ? this.brain.model : 'unknown',
                 };
 

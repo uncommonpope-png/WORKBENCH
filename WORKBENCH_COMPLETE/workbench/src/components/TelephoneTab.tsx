@@ -154,16 +154,31 @@ export const TelephoneTab: React.FC<TelephoneTabProps> = ({ accentColor, provide
     const now = Date.now();
     setChatMessages(prev => [...prev, { role: "you", text, ts: now }]);
     try {
-      const res = await fetch("/api/gsk/chat", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ message: text }),
-      });
+      // P2.9: hard client timeout (was: hang forever on spinner).
+      const ctrl = new AbortController();
+      const budget = setTimeout(() => ctrl.abort(), 75000);
+      let res: Response;
+      try {
+        res = await fetch("/api/gsk/chat", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ message: text }),
+          signal: ctrl.signal,
+        });
+      } finally {
+        clearTimeout(budget);
+      }
       const data = await res.json();
-      const reply = data?.response || data?.content || (data?.success ? "(acknowledged)" : "(silence)");
+      // P2.10: honest shapes only — no "(acknowledged)" for empty, no "(silence)" masquerade.
+      const reply = data?.response || data?.content
+        ? String(data.response || data.content)
+        : (data?.success === false
+            ? `(error: ${data.error || "empty reply"})`
+            : "(silence: soul gave nothing — try again)");
       setChatMessages(prev => [...prev, { role: "gsk", text: String(reply), ts: Date.now() }]);
-    } catch (e) {
-      setChatMessages(prev => [...prev, { role: "gsk", text: "(connection static...)", ts: Date.now() }]);
+    } catch (e: any) {
+      const reason = e?.name === "AbortError" ? "timed out after 75s" : String(e?.message || e);
+      setChatMessages(prev => [...prev, { role: "gsk", text: `(connection failed: ${reason})`, ts: Date.now() }]);
     } finally {
       setSending(false);
     }

@@ -35,6 +35,9 @@ class AutonomousLearning {
         
         this.dataDir = memory.dataDir;
         this.knowledgePath = path.join(this.dataDir, 'knowledge.jsonl');
+        // P3.16/P3.19: persistent per-repo ingest index — clone once per remote
+        // HEAD, not once per boot. (learnedTopics tail-scan stays as session cache.)
+        this.gitIndexPath = path.join(this.dataDir, 'git-ingest-index.json');
         this.seshatPagesDir = options.seshatPagesDir || process.env.SESHAT_PAGES_DIR || 'C:\\Users\\uncom\\Desktop\\seshat-second-brain\\pages';
         this.searchProvider = options.searchProvider || (topic => this._searchWeb(topic));
         this.fetchProvider = options.fetchProvider || (url => this._fetchSource(url));
@@ -47,6 +50,15 @@ class AutonomousLearning {
     async learnFromGit(repoUrl, branch = 'main') {
         try {
             const { execSync } = require('child_process');
+            // P3.16: skip the clone when the remote hasn't moved since our last
+            // ingest. Every boot used to re-clone full monorepos then discard
+            // all writes as duplicates ("cloning the same repo forever").
+            const remoteSha = this._gitRemoteSha(repoUrl);
+            const indexed = this._gitIndexGet(repoUrl);
+            if (remoteSha && indexed && indexed.sha === remoteSha) {
+                console.log(`[AutonomousLearning] Skipping ${repoUrl} — already ingested at ${remoteSha.slice(0, 8)}`);
+                return { status: 'skipped', repo: repoUrl, sha: remoteSha };
+            }
             const tmpDir = require('path').join(require('os').tmpdir(), `gsk-${Date.now()}`);
             // Sanitize branch name — only allow valid git ref characters
             const safeBranch = String(branch).replace(/[^a-zA-Z0-9._\/-]/g, '');
@@ -114,6 +126,7 @@ class AutonomousLearning {
                 fs.rmSync(tmpDir, { recursive: true, force: true });
             } catch (e) {}
             
+            if (remoteSha) this._gitIndexSet(repoUrl, { sha: remoteSha, branch: safeBranch, at: new Date().toISOString(), files: learned.length });
             return { status: 'success', repo: repoUrl, files_learned: learned.length, files: learned };
         } catch (e) {
             return { status: 'error', repo: repoUrl, error: e.message };
@@ -612,6 +625,38 @@ class AutonomousLearning {
                     if (entry.topic) this.learnedTopics.add(entry.topic);
                 } catch (e) {}
             }
+        } catch (e) {}
+    }
+
+    // P3.16: remote HEAD without cloning (cheap). Null = couldn't check → caller clones (availability over thrift).
+    _gitRemoteSha(repoUrl) {
+        try {
+            const { execSync } = require('child_process');
+            const out = execSync(`git ls-remote "${repoUrl}" HEAD`, { timeout: 20000, encoding: 'utf-8', stdio: 'pipe' });
+            const sha = (out.trim().split(/\s+/)[0] || '').trim();
+            return /^[0-9a-f]{40}$/i.test(sha) ? sha : null;
+        } catch (e) {
+            return null;
+        }
+    }
+
+    _gitIndexLoad() {
+        try {
+            if (!fs.existsSync(this.gitIndexPath)) return {};
+            return JSON.parse(fs.readFileSync(this.gitIndexPath, 'utf8')) || {};
+        } catch (e) { return {}; }
+    }
+
+    _gitIndexGet(repoUrl) {
+        return this._gitIndexLoad()[repoUrl] || null;
+    }
+
+    _gitIndexSet(repoUrl, entry) {
+        try {
+            const idx = this._gitIndexLoad();
+            idx[repoUrl] = entry;
+            if (!fs.existsSync(this.dataDir)) fs.mkdirSync(this.dataDir, { recursive: true });
+            fs.writeFileSync(this.gitIndexPath, JSON.stringify(idx, null, 2));
         } catch (e) {}
     }
     

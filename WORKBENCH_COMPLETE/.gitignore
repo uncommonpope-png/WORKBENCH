@@ -80,3 +80,5 @@ temp/
 
 # Private: Pope's personal conversation history never ships with the product
 workbench/data/chat-sessions/
+
+/gsk-pkg/

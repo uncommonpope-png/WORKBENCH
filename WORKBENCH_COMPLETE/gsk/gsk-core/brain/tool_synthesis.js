@@ -48,9 +48,21 @@ class ToolSynthesis {
         // 1. Generate tool code using brain
         const toolCode = await this._generateToolCode(spec);
 
-        // 2. Save tool file
+        // 2. Save tool file — GATE: reject HTML / missing exports / empty code
+        if (
+            !toolCode ||
+            toolCode.length < 100 ||
+            toolCode.includes('<!DOCTYPE') ||
+            toolCode.includes('<html') ||
+            toolCode.includes('<body') ||
+            !toolCode.includes('module.exports')
+        ) {
+            console.warn(`[ToolSynthesis] REJECTED invalid tool code for "${name}" — likely HTML poison from failed LLM quota`);
+            throw new Error(`[ToolSynthesis] Tool code for "${name}" failed validation gate (HTML or missing exports)`);
+        }
         const toolPath = path.join(this.toolsDir, `${name}.js`);
         fs.writeFileSync(toolPath, toolCode, 'utf-8');
+
 
         // 3. Sandbox test
         const testResult = await this._sandboxTest(name, toolCode, spec);

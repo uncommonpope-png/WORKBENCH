@@ -88,18 +88,39 @@ export const OmniRouteTab: React.FC<OmniRouteTabProps> = ({ accentColor, provide
     setNewMessage("");
 
     try {
-      const res = await fetch(GSK_HEART_ENABLED ? "/api/gsk-heart/chat" : "/api/omniroute/chat", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          model: selectedModel,
-          messages: chatHistory.map(m => ({ role: m.role, content: m.content })).concat(userMsg),
-          temperature: 0.7,
-          max_tokens: 2048,
-        }),
-      });
+      // P2.9: hard client timeout. P2.10: failed shapes render as errors, never silent drops.
+      const ctrl = new AbortController();
+      const budget = setTimeout(() => ctrl.abort(), 75000);
+      let res: Response;
+      try {
+        res = await fetch(GSK_HEART_ENABLED ? "/api/gsk-heart/chat" : "/api/omniroute/chat", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            model: selectedModel,
+            messages: chatHistory.map(m => ({ role: m.role, content: m.content })).concat(userMsg),
+            temperature: 0.7,
+            max_tokens: 2048,
+          }),
+          signal: ctrl.signal,
+        });
+      } finally {
+        clearTimeout(budget);
+      }
       const data = await res.json();
-      if (data.choices?.[0]?.message) {
+      if (data.success === false) {
+        throw new Error(String(data.error || "empty reply from soul"));
+      }
+      if (data.content && !data.choices?.[0]?.message) {
+        // Heart shape {content} vs OpenAI shape {choices} — accept both.
+        setChatHistory(prev => [...prev, {
+          role: "assistant",
+          content: String(data.content),
+          model: selectedModel,
+          tokens: 0,
+          timestamp: Date.now()
+        }]);
+      } else if (data.choices?.[0]?.message) {
         const tokens = data.usage?.total_tokens || 0;
         const cost = calculateCost(selectedModel, data.usage?.prompt_tokens || 0, data.usage?.completion_tokens || 0);
         setTokenUsage(prev => ({
@@ -114,6 +135,15 @@ export const OmniRouteTab: React.FC<OmniRouteTabProps> = ({ accentColor, provide
           model: selectedModel, 
           tokens, 
           timestamp: Date.now() 
+        }]);
+      } else {
+        // P2.10: never silently drop — empty success renders as an honest error.
+        setChatHistory(prev => [...prev, {
+          role: "assistant",
+          content: `Error: soul returned nothing (HTTP ${res.status}) — try rephrasing`,
+          model: selectedModel,
+          tokens: 0,
+          timestamp: Date.now()
         }]);
       }
     } catch (e) {

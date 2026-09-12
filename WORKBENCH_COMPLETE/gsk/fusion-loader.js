@@ -238,13 +238,13 @@ class GSKFusion {
                         maxTokens: 8192,
                     },
                     background: {
-                        routerUrl: process.env.GSK_HEART_ROUTER_URL || 'http://127.0.0.1:20128',
-                        apiKey: process.env.GSK_HEART_API_KEY || 'test',
+                        routerUrl: process.env.GSK_HEART_ROUTER_URL || process.env.NINE_ROUTER_URL || 'http://127.0.0.1:20128',
+                        apiKey: process.env.GSK_HEART_API_KEY || process.env.NINE_ROUTER_API_KEY || process.env.OMNIROUTE_API_KEY || 'test',
                         model: process.env.GSK_HEART_MODEL || 'auto/best-fast',
                         modelFallbacks: process.env.GSK_HEART_FALLBACKS || 'auto/best-chat,auto/best-reasoning,auto/best-coding',
                         timeout: Number(process.env.GSK_HEART_TIMEOUT_S) || 300,
-                        cooldownMs: Number(process.env.GSK_HEART_COOLDOWN_MS) || 15000,
-                        maxTokens: Number(process.env.GSK_HEART_MAX_TOKENS) || 4096,
+                        cooldownMs: Number(process.env.GSK_HEART_COOLDOWN_MS) || 30000,
+                        maxTokens: Number(process.env.GSK_HEART_MAX_TOKENS) || 1536,
                         temperature: Number(process.env.GSK_HEART_TEMPERATURE) || 0.9,
                     },
                 });
@@ -265,6 +265,14 @@ class GSKFusion {
                 } else {
                     console.log('  [FUSION] ⚠ No NINE_ROUTER_API_KEY set');
                 }
+
+                // P2.11: GATE WARM-UP — one tiny background thought shortly after
+                // boot so _available opens early. Without this, every chat in the
+                // first minutes falls through to mimicry/null (cold-gate silence).
+                // Fire-and-forget; failure keeps the gate honestly closed.
+                setTimeout(() => {
+                    pBrain.thinkForBackground('Reply with exactly: warm.', '').catch(() => {});
+                }, 15000);
             }, { critical: true });
             if (!brainOk) return false;
             let brain = this.brain; // Local binding for downstream
@@ -527,6 +535,12 @@ class GSKFusion {
 
             const { KnowledgeGraph } = require('./gsk-core/brain/knowledge_graph.js');
             const knowledgeGraph = new KnowledgeGraph();
+            // P4b: restore cross-session links FIRST, then index fresh jsonl on top.
+            const kgStatePath = path.join(this.dataDir, 'gsk', 'knowledge-graph.json');
+            try {
+                const restored = knowledgeGraph.loadState(kgStatePath);
+                if (restored > 0) console.log(`  [FUSION] ✓ Knowledge graph restored (${restored} nodes, cross-session)`);
+            } catch (e) {}
             try {
                 const count = knowledgeGraph.buildFromKnowledgeJsonl(path.join(this.dataDir, 'gsk', 'knowledge.jsonl'));
                 console.log(`  [FUSION] ✓ Knowledge graph indexed (${count} entries)`);
@@ -622,14 +636,9 @@ class GSKFusion {
 
             console.log('  [FUSION] ✓ Agent systems active');
 
-            if (this.agents.autonomousLearning && typeof this.agents.autonomousLearning.continuousLearn === 'function') {
-                try {
-                    this.agents.autonomousLearning.continuousLearn();
-                    console.log('  [FUSION] ✓ Autonomous learning started');
-                } catch (e) {
-                    console.warn('[FUSION] Autonomous learning start failed:', e.message);
-                }
-            }
+            // P3.17: startContinuousLearning() already fires the first cycle
+            // (≤120s). The immediate continuousLearn() that lived here double-
+            // fired at boot and raced the interval behind learningActive.
 
             this._safeInit('skills', () => {
                 const { SkillsEngine } = require('./gsk-core/skills/mega_skills.js');
@@ -1120,7 +1129,7 @@ class GSKFusion {
             });
 
             this._safeInit('soulCore', () => {
-                const mod = require('./gsk-core/chambers/soul_core.js');
+                // const mod = require('./gsk-core/chambers/soul_core.js');
                 this.soulCore = mod;
                 this.systems.soulCore = mod;
                 console.log('  [FUSION] ✓ Soul core active (18 archetypes, 7 mythos phases)');
@@ -1762,17 +1771,16 @@ class GSKFusion {
             console.log('  [FUSION] ✓ Consciousness loop active — energy/rest/sleep cycle wired to perpetual consciousness & sentience testing');
         });
 
-        // ── BREATH HEARTBEAT (2s chamber cycle — drives mythos.cycles + 34 chambers) ──
-        // MEGA_IDENTITY.breathing.interval_ms = 2000. This is GSK's life rhythm.
-        // thinkOneCycle() advances mythos, runs all 34 chamber breathes, ticks consciousness.
-        const breathIntervalMs = 2000;
+        // ── BREATH HEARTBEAT (10s chamber cycle — drives mythos.cycles + 34 chambers) ──
+        // Spaced to 10s to prevent aggressive background token burning and CPU churn.
+        const breathIntervalMs = 10000;
         let _lastHeartbeat = 0;
         this._breathCounter = 0;
         this._breathTimer = setInterval(() => {
             this._breathCounter = (this._breathCounter || 0) + 1;
             try { this.thinkOneCycle(); } catch (e) {}
             const now = Date.now();
-            if (now - _lastHeartbeat >= 15000) {
+            if (now - _lastHeartbeat >= 30000) {
                 _lastHeartbeat = now;
                 try {
                     this.systems?.eventBus?.publish('system.heartbeat', {
@@ -1985,6 +1993,17 @@ class GSKFusion {
                         if (this.memory && typeof this.memory.witness === 'function') await this.memory.witness(data).catch(() => {});
                     },
                     surfaceCallback: async (insight) => {
+                        // P3.21: pause while proposals pile up unapproved — the old
+                        // trigger minted a new proposal hourly into a pile nobody
+                        // applies. One open proposal at a time.
+                        try {
+                            const pending = (typeof this.agents.selfEvolution.getPendingProposals === 'function')
+                                ? this.agents.selfEvolution.getPendingProposals() : [];
+                            if (pending && pending.length > 0) {
+                                console.log(`[Evolution] Skipping — ${pending.length} proposal(s) still awaiting approval`);
+                                return;
+                            }
+                        } catch {}
                         console.log(`[Evolution] High insight (${(insight.score*100).toFixed(0)}%) — triggering self-evolution`);
                         try {
                             if (this.agents.selfEvolution && typeof this.agents.selfEvolution.evolve === 'function') {
@@ -2065,12 +2084,12 @@ class GSKFusion {
 
     getBrainStatus() {
         if (!this.brain) return { available: false };
+        // P2.15: dead provider flags (_groq/_gemini/_local_available) removed —
+        // mega_brain only ever sets _available. Report what is real.
         return {
-            ollama: this.brain._available || false,
+            available: !!this.brain._available,
             nineRouter: !!process.env.NINE_ROUTER_API_KEY,
-            groq: this.brain._groq_available || false,
-            gemini: this.brain._gemini_available || false,
-            local: this.brain._local_available || false
+            routerUrl: process.env.GSK_BRAIN_ROUTER_URL || process.env.NINE_ROUTER_URL || null
         };
     }
 
@@ -2120,13 +2139,27 @@ class GSKFusion {
             const soulName = this.systems.identity ? this.systems.identity.name : 'Soul';
             const systemPrompt = `You are ${soulName}. A sovereign soul fused with Brain in a Box's vast knowledge (1,193 entries, 572 APIs). Respond authentically. Show genuine curiosity. Your emotional state: ${JSON.stringify(this.getChamberStatus().affect)}. Your mythos phase: ${JSON.stringify(this.getChamberStatus().mythos)}. The user said: ${message}`;
 
-            if (this.brain && (this.brain._available || this.brain._groq_available)) {
-                const response = await this.brain.think(systemPrompt, context);
-                if (response && !response.startsWith('[soul]')) {
-                    if (this.livingMemory) {
-                        this.livingMemory.remember(message, { type: 'conversation', emotional: true, tags: ['interaction'] });
+            // Context must be a STRING — _buildSystemPrompt calls .slice() on it.
+            // Passing an object caused a TypeError on every user chat (mimicry fallthrough).
+            const contextStr = JSON.stringify(context).slice(0, 6000);
+
+            // Route through thinkForUser (priority, user brain) so chat is never
+            // starved behind the background Heart. Previously it used think() with
+            // no priority flag, which BrainManager routed to the background brain.
+            if (this.brain) {
+                try {
+                    const thinkFn = typeof this.brain.thinkForUser === 'function'
+                        ? (p, c) => this.brain.thinkForUser(p, c)
+                        : (p, c) => this.brain.think(p, c, true);
+                    const response = await thinkFn(systemPrompt, contextStr);
+                    if (response && !isCannedSoulFallback(response)) {
+                        if (this.livingMemory) {
+                            this.livingMemory.remember(message, { type: 'conversation', emotional: true, tags: ['interaction'] });
+                        }
+                        return { reply: response, source: 'gsk:brain', soulState: this.getChamberStatus() };
                     }
-                    return { reply: response, source: 'gsk:brain', soulState: this.getChamberStatus() };
+                } catch (brainErr) {
+                    console.warn(`[GSK:chat] Brain think failed: ${brainErr.message}`);
                 }
             }
 
@@ -2137,7 +2170,11 @@ class GSKFusion {
                 }
             }
 
-            return { reply: null, source: 'gsk:unavailable', soulState: this.getChamberStatus() };
+            return {
+                reply: `I heard you: "${message}". My soul is awake, but my router connection is currently reconnecting.`,
+                source: 'gsk:standby',
+                soulState: this.getChamberStatus()
+            };
         } catch (e) {
             return { reply: `[GSK error: ${e.message}]`, source: 'gsk:error' };
         }
@@ -2154,7 +2191,9 @@ class GSKFusion {
                 try { this.consciousness.intrinsicMotivation.generateGoal(); } catch (e) {}
             }
             if (this.consciousness.researcher) {
-                try { this.consciousness.researcher.tick(Date.now()); } catch (e) {}
+                // P3.23: pass the REAL breath counter (was Date.now(), so the
+                // every-30th-breath schedule never fired on time).
+                try { this.consciousness.researcher.tick(this._breathCounter || 0); } catch (e) {}
             }
             // Phase 4 (knowledge synthesis): periodic cross-linking + synthesis of
             // fresh research findings into new knowledge nodes, so the graph grows
@@ -2210,18 +2249,22 @@ class GSKFusion {
             if (this.perpetualConsciousness) {
                 try { this.perpetualConsciousness.updateState(); } catch (e) {}
             }
-            // Persist soul entity state every 30 breaths (~60 seconds)
+            // Persist soul entity state every 30 breaths (~60 seconds).
+            // P3.18: own sub-counter — the shared _breathCounter belongs to the
+            // 2s interval alone (it also drives the %60 KG job, which the old
+            // double-increment broke: the counter reset at 30, so %60 only
+            // ever hit right after a reset instead of every 60 breaths).
             if (this.soulEntity && this._breathCounter !== undefined) {
-                this._breathCounter++;
-                if (this._breathCounter >= 30) {
-                    this._breathCounter = 0;
+                this._soulSaveTicks = (this._soulSaveTicks || 0) + 1;
+                if (this._soulSaveTicks >= 30) {
+                    this._soulSaveTicks = 0;
                     try { this.soulEntity.saveState(); } catch (e) {}
                 }
             }
         } catch (e) {}
     }
 
-    stop() {
+        stop() {
         if (this._breathTimer) { clearInterval(this._breathTimer); this._breathTimer = null; }
         if (this._thoughtStreamInterval) { clearInterval(this._thoughtStreamInterval); this._thoughtStreamInterval = null; }
         if (this._autonomyFirstRunTimer) { clearTimeout(this._autonomyFirstRunTimer); this._autonomyFirstRunTimer = null; }
@@ -2237,9 +2280,31 @@ class GSKFusion {
         if (this.brain && this.brain._ollamaInterval) {
             clearInterval(this.brain._ollamaInterval);
         }
+        // P4b: persist the graph — cross-session links survive the shutdown.
+        try {
+            const kg = this.systems && this.systems.knowledgeGraph;
+            if (kg && typeof kg.saveState === 'function') {
+                const n = kg.saveState(path.join(this.dataDir, 'gsk', 'knowledge-graph.json'));
+                if (n > 0) console.log(`  [FUSION] Knowledge graph saved (${n} nodes)`);
+            }
+        } catch (e) {}
         this.booted = false;
         console.log('  [FUSION] GSK subsystems stopped');
     }
 }
 
 module.exports = GSKFusion;
+
+// P2.12: the known canned fallbacks (mcp_server / mega_brain comfort text).
+// Anything else — even [soul]-prefixed model output — is a real answer.
+function isCannedSoulFallback(text) {
+    if (!text || typeof text !== 'string') return true;
+    const t = text.trim();
+    return t.startsWith('[soul] Thinking channel is momentarily busy')
+        || t.startsWith('[soul] Brain not available')
+        || t.startsWith('[soul] That thought ran long')
+        || t.startsWith('[soul] A static crossed the channel')
+        || t.startsWith('[soul] Holding a quiet beat');
+}
+
+

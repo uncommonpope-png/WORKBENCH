@@ -227,22 +227,49 @@ export const GskChatTab: React.FC<GskChatTabProps> = ({ accentColor }) => {
           body: JSON.stringify({ summary: evicted.map((m) => `${m.role}: ${m.content.slice(0, 200)}`).join(" | ") }),
         }).catch(() => {});
       }
-      const res = await fetch("/api/gsk-heart/chat", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          messages: [
-            { role: "system", content: GSK_SYSTEM_PROMPT },
-            ...windowed,
-          ],
-          temperature: 0.7,
-          max_tokens: 2048,
-        }),
-      });
+      // P2.9: hard client timeout — no more eternal spinners (was: plain fetch).
+      const ctrl = new AbortController();
+      const budget = setTimeout(() => ctrl.abort(), 75000);
+      let res: Response;
+      try {
+        res = await fetch("/api/gsk-heart/chat", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            messages: [
+              { role: "system", content: GSK_SYSTEM_PROMPT },
+              ...windowed,
+            ],
+            temperature: 0.7,
+            max_tokens: 2048,
+          }),
+          signal: ctrl.signal,
+        });
+      } finally {
+        clearTimeout(budget);
+      }
       const data = await res.json();
+      // P2.10: failures are errors, never assistant bubbles. success===false
+      // or empty content throws into the honest error path below (both strings
+      // stay in the transcript filter above so errors never poison context).
+      if (data.success === false) {
+        throw new Error(String(data.error || `empty reply (HTTP ${res.status})`));
+      }
+      if (!data.content || !String(data.content).trim()) {
+        const assistantMsg: Message = {
+          role: "assistant",
+          content: `Model returned no content (HTTP ${res.status}) - try rephrasing`,
+          model: "error",
+          ts: Date.now(),
+        };
+        const full = [...withUser, assistantMsg];
+        setMessages(full);
+        persist(full, text.slice(0, 48));
+        return;
+      }
       const assistantMsg: Message = {
         role: "assistant",
-        content: data.content || data.error || `Model returned no content (HTTP ${res.status}) - try rephrasing`,
+        content: data.content,
         model: data.model,
         viaOmniRoute: data.viaOmniRoute === true,
         ts: Date.now(),
@@ -251,7 +278,10 @@ export const GskChatTab: React.FC<GskChatTabProps> = ({ accentColor }) => {
       setMessages(full);
       persist(full, text.slice(0, 48));
     } catch (e: any) {
-      const errMsg: Message = { role: "assistant", content: `Connection to my body failed: ${e.message}`, model: "error", ts: Date.now() };
+      const reason = e?.name === "AbortError"
+        ? "timed out after 75s — the soul is thinking too long, try a shorter message"
+        : (e?.message || "unknown transport failure");
+      const errMsg: Message = { role: "assistant", content: `Connection to my body failed: ${reason}`, model: "error", ts: Date.now() };
       const full = [...withUser, errMsg];
       setMessages(full);
       persist(full, text.slice(0, 48));

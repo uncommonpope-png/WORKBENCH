@@ -1,14 +1,5 @@
-module.exports.MANIFEST = {
-    name: 'mega_skills',
-    description: 'Skill: mega_skills',
-    version: '1.0.0',
-    inputs: {},
-    output: { schema: 'ok/error' }
-};
+'use strict';
 
-module.exports.run = async (params) => {
-    // Standardized implementation
-};
 /**
  * ═══════════════════════════════════════════════════════════════════════════
  * MEGA_SKILLS.JS — UNIFIED SKILL ENGINE FOR THE GREATEST AGENT EVER
@@ -22,8 +13,6 @@ module.exports.run = async (params) => {
  *
  * ═══════════════════════════════════════════════════════════════════════════
  */
-
-'use strict';
 
 const fs = require('fs');
 const path = require('path');
@@ -47,16 +36,15 @@ function loadSkillFiles() {
         if (content.trim().startsWith('`')) return false;
         if (content.includes('<!DOCTYPE') || content.includes('<html')) return false;
         if (!content.includes('module.exports') && !content.includes('exports.')) return false;
-        if (!content.includes('execute')) return false;
         if (!content.includes('}') || content.trim().endsWith('{')) return false;
         return true;
     }
 
+    let loadedCount = 0;
     for (const file of skillFiles) {
         try {
             const filePath = path.join(skillsDir, file);
             
-            // Pre-validate file content before requiring
             let fileContent;
             try {
                 fileContent = fs.readFileSync(filePath, 'utf-8');
@@ -66,34 +54,53 @@ function loadSkillFiles() {
             }
 
             if (!isValidSkillFile(fileContent)) {
-                console.warn(`[MEGA_SKILLS] Skipping invalid/corrupted skill file: ${file}`);
+                // Do not warn for invalid files to avoid log flooding
                 continue;
             }
 
             const mod = require(filePath);
 
-            for (const [exportName, skillFn] of Object.entries(mod)) {
-                if (typeof skillFn === 'function') {
-                    let skillName = exportName.replace(/^skill_/, '');
-                    if (skillName.includes('-')) {
-                        skillName = skillName.replace(/-/g, '_');
+            if (mod.MANIFEST && typeof mod.run === 'function') {
+                const skillName = mod.MANIFEST.name;
+                registry[skillName] = {
+                    name: skillName,
+                    description: mod.MANIFEST.description || `Skill: ${skillName}`,
+                    plt_affinity: mod.PLT_AFFINITY || { profit: 0.5, love: 0.3, tax: 0.2 },
+                    weight: 0.75,
+                    _file: file,
+                    _run: mod.run
+                };
+                loadedCount++;
+            } else {
+                // Fallback for function exports
+                for (const [exportName, skillFn] of Object.entries(mod)) {
+                    if (typeof skillFn === 'function' && exportName !== 'run') {
+                        let skillName = exportName.replace(/^skill_/, '');
+                        if (skillName.includes('-')) {
+                            skillName = skillName.replace(/-/g, '_');
+                        }
+
+                        const baseName = skillName.replace(/_/g, '_');
+                        const pltAffinity = mod.PLT_AFFINITY || { profit: 0.5, love: 0.3, tax: 0.2 };
+
+                        registry[skillName] = {
+                            name: skillName,
+                            description: `Skill: ${skillName}`,
+                            plt_affinity: pltAffinity,
+                            weight: 0.75,
+                            _file: file,
+                        };
+                        loadedCount++;
                     }
-
-                    const baseName = skillName.replace(/_/g, '_');
-                    const pltAffinity = mod.PLT_AFFINITY || { profit: 0.5, love: 0.3, tax: 0.2 };
-
-                    registry[skillName] = {
-                        name: skillName,
-                        description: `Skill: ${skillName}`,
-                        plt_affinity: pltAffinity,
-                        weight: 0.75,
-                        _file: file,
-                    };
                 }
             }
         } catch (e) {
             console.warn(`[MEGA_SKILLS] Failed to load skill file: ${file} | Reason: ${e.message}`);
         }
+    }
+
+    if (loadedCount > 0) {
+        console.log(`[SkillsEngine] Loaded ${loadedCount} skill(s)`);
     }
 
     return registry;
